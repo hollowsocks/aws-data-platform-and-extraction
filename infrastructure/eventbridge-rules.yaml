@@ -1,0 +1,499 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EventBridge rules for Shopify webhook processing'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+
+  PartnerEventSourceName:
+    Type: String
+    Description: 'Shopify partner event source name (aws.partner/shopify.com/[shop-id]/default)'
+
+  EventBusName:
+    Type: String
+    Default: marsmen-shopify-partner-bus
+    Description: 'Friendly name for the partner event bus'
+
+  OrderProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the order processor Lambda'
+
+  FulfillmentProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the fulfillment processor Lambda'
+
+  CustomerProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the customer processor Lambda'
+
+  ProductProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the product processor Lambda'
+
+  CartProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the cart/checkout processor Lambda'
+
+Resources:
+  ShopifyEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref EventBusName
+      EventSourceName: !Ref PartnerEventSourceName
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+
+  OrderEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Brand}-shopify-order-events-dlq'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+
+  OrderProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-order-processor'
+      RetentionInDays: 30
+
+  CustomerEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Brand}-shopify-customer-events-dlq'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+
+  ProductEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Brand}-shopify-product-events-dlq'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+
+  CartEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Brand}-shopify-cart-events-dlq'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+
+  OrderProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-order-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-orders-cache'
+
+  OrderProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-order-processor'
+      Description: 'Processes real-time Shopify order events'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref OrderProcessorImageUri
+      Role: !GetAtt OrderProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+          DYNAMODB_TABLE: !Sub '${Brand}-orders-cache'
+
+  OrderEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-shopify-order-events'
+      Description: 'Route Shopify order events to Lambda processor'
+      EventBusName: !Ref ShopifyEventBus
+      EventPattern:
+        source:
+          - !Ref PartnerEventSourceName
+        detail-type:
+          - orders/create
+          - orders/updated
+          - orders/cancelled
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt OrderProcessorFunction.Arn
+          Id: OrderProcessorTarget
+          DeadLetterConfig:
+            Arn: !GetAtt OrderEventsDLQ.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 3
+            MaximumEventAge: 3600
+
+  FulfillmentProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-fulfillment-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+
+  CustomerProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-customer-processor'
+      RetentionInDays: 30
+
+  CustomerProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-customer-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CustomerS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+        - PolicyName: CustomerTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-customers-cache'
+
+  ProductProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-product-processor'
+      RetentionInDays: 30
+
+  ProductProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-product-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ProductS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+
+  CartProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-cart-processor'
+      RetentionInDays: 30
+
+  CartProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-cart-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CartS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+        - PolicyName: CartTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-abandoned-carts'
+
+  FulfillmentProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-fulfillment-processor'
+      Description: 'Placeholder for fulfillment processor image URI'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref FulfillmentProcessorImageUri
+      Role: !GetAtt FulfillmentProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+
+  CustomerProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-customer-processor'
+      Description: 'Processes Shopify customer events'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref CustomerProcessorImageUri
+      Role: !GetAtt CustomerProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+          CUSTOMER_TABLE: !Sub '${Brand}-customers-cache'
+
+  ProductProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-product-processor'
+      Description: 'Stores Shopify product events for downstream ETL'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ProductProcessorImageUri
+      Role: !GetAtt ProductProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+
+  CartProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-cart-processor'
+      Description: 'Processes Shopify cart and checkout events'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref CartProcessorImageUri
+      Role: !GetAtt CartProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+          ABANDONED_CART_TABLE: !Sub '${Brand}-abandoned-carts'
+
+  FulfillmentEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-shopify-fulfillment-events'
+      Description: 'Route Shopify fulfillment events to Lambda processor'
+      EventBusName: !Ref ShopifyEventBus
+      EventPattern:
+        source:
+          - !Ref PartnerEventSourceName
+        detail-type:
+          - fulfillments/create
+          - fulfillments/update
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt FulfillmentProcessorFunction.Arn
+          Id: FulfillmentProcessorTarget
+
+  CustomerEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-shopify-customer-events'
+      Description: 'Route Shopify customer events to Lambda processor'
+      EventBusName: !Ref ShopifyEventBus
+      EventPattern:
+        source:
+          - !Ref PartnerEventSourceName
+        detail-type:
+          - customers/create
+          - customers/update
+          - customers/delete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CustomerProcessorFunction.Arn
+          Id: CustomerProcessorTarget
+          DeadLetterConfig:
+            Arn: !GetAtt CustomerEventsDLQ.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 3
+            MaximumEventAge: 3600
+
+  ProductEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-shopify-product-events'
+      Description: 'Route Shopify product events to Lambda processor'
+      EventBusName: !Ref ShopifyEventBus
+      EventPattern:
+        source:
+          - !Ref PartnerEventSourceName
+        detail-type:
+          - products/create
+          - products/update
+          - products/delete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProductProcessorFunction.Arn
+          Id: ProductProcessorTarget
+          DeadLetterConfig:
+            Arn: !GetAtt ProductEventsDLQ.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 3
+            MaximumEventAge: 3600
+
+  CartEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-shopify-cart-events'
+      Description: 'Route Shopify cart and checkout events to Lambda processor'
+      EventBusName: !Ref ShopifyEventBus
+      EventPattern:
+        source:
+          - !Ref PartnerEventSourceName
+        detail-type:
+          - carts/create
+          - carts/update
+          - checkouts/create
+          - checkouts/update
+          - checkouts/delete
+          - checkouts/complete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CartProcessorFunction.Arn
+          Id: CartProcessorTarget
+          DeadLetterConfig:
+            Arn: !GetAtt CartEventsDLQ.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 3
+            MaximumEventAge: 3600
+
+  OrderProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OrderProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt OrderEventsRule.Arn
+
+  FulfillmentProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FulfillmentProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt FulfillmentEventsRule.Arn
+
+  CustomerProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CustomerProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CustomerEventsRule.Arn
+
+  ProductProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProductProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ProductEventsRule.Arn
+
+  CartProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CartProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CartEventsRule.Arn
+
+Outputs:
+  EventBusNameOutput:
+    Description: 'Name of the Shopify partner event bus'
+    Value: !Ref ShopifyEventBus
+  EventBusArn:
+    Description: 'ARN of the Shopify partner event bus'
+    Value: !GetAtt ShopifyEventBus.Arn

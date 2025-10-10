@@ -1,0 +1,375 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Step Functions workflow and Lambdas for Shopify bulk extracts'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used for naming resources'
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: 'Deployment environment identifier (e.g., dev, stage, prod)'
+
+  DataLakeBucketName:
+    Type: String
+    Default: ''
+    Description: 'Target S3 bucket for exported data; defaults to ${Brand}-data-lake-${AccountId}'
+
+  ShopifyShopDomain:
+    Type: String
+    Description: 'Shopify shop domain (e.g., example.myshopify.com)'
+
+  ShopifyAccessTokenSecretArn:
+    Type: String
+    Description: 'Secrets Manager ARN containing the Shopify Admin API access token under SecretString key access_token'
+
+  BulkExportImageUri:
+    Type: String
+    Description: 'ECR image URI for the bulk export Lambda'
+
+  BulkPollImageUri:
+    Type: String
+    Description: 'ECR image URI for the bulk poll Lambda'
+
+  BulkDownloadImageUri:
+    Type: String
+    Description: 'ECR image URI for the bulk download Lambda'
+
+  BulkWorkflowName:
+    Type: String
+    Default: shopify-bulk-orders
+    Description: 'Name of the Step Functions state machine'
+
+  BulkWorkflowScheduleExpression:
+    Type: String
+    Default: ''
+    Description: 'Optional EventBridge schedule expression to trigger the workflow (leave blank to disable)'
+
+Conditions:
+  UseDefaultDataLakeBucket: !Equals [!Ref DataLakeBucketName, '']
+  CreateSchedule: !Not [!Equals [!Ref BulkWorkflowScheduleExpression, '']]
+
+Mappings:
+  LambdaDefaults:
+    Export:
+      Timeout: 120
+      Memory: 512
+    Poll:
+      Timeout: 60
+      Memory: 256
+    Download:
+      Timeout: 900
+      Memory: 1024
+
+Resources:
+  BulkExportLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-bulk-export'
+      RetentionInDays: 30
+
+  BulkPollLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-bulk-poll'
+      RetentionInDays: 30
+
+  BulkDownloadLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-shopify-bulk-download'
+      RetentionInDays: 30
+
+  BulkExportRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-bulk-export-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref ShopifyAccessTokenSecretArn
+
+  BulkPollRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-bulk-poll-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref ShopifyAccessTokenSecretArn
+
+  BulkDownloadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-shopify-bulk-download-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DownloadBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetObject
+                Resource: !If
+                  - UseDefaultDataLakeBucket
+                  - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::${DataLakeBucketName}/*'
+
+  BulkExportFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-bulk-export'
+      Description: 'Triggers Shopify bulk operations via GraphQL'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref BulkExportImageUri
+      Role: !GetAtt BulkExportRole.Arn
+      Timeout: !FindInMap [LambdaDefaults, Export, Timeout]
+      MemorySize: !FindInMap [LambdaDefaults, Export, Memory]
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          ENVIRONMENT: !Ref Environment
+          SHOPIFY_SHOP: !Ref ShopifyShopDomain
+          SHOPIFY_ACCESS_TOKEN: !Sub '{{resolve:secretsmanager:${ShopifyAccessTokenSecretArn}:SecretString:access_token}}'
+          S3_BUCKET: !If
+            - UseDefaultDataLakeBucket
+            - !Sub '${Brand}-data-lake-${AWS::AccountId}'
+            - !Ref DataLakeBucketName
+
+  BulkPollFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-bulk-poll'
+      Description: 'Polls Shopify bulk operation status'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref BulkPollImageUri
+      Role: !GetAtt BulkPollRole.Arn
+      Timeout: !FindInMap [LambdaDefaults, Poll, Timeout]
+      MemorySize: !FindInMap [LambdaDefaults, Poll, Memory]
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          ENVIRONMENT: !Ref Environment
+          SHOPIFY_SHOP: !Ref ShopifyShopDomain
+          SHOPIFY_ACCESS_TOKEN: !Sub '{{resolve:secretsmanager:${ShopifyAccessTokenSecretArn}:SecretString:access_token}}'
+
+  BulkDownloadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-shopify-bulk-download'
+      Description: 'Downloads, converts, and stores Shopify bulk data'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref BulkDownloadImageUri
+      Role: !GetAtt BulkDownloadRole.Arn
+      Timeout: !FindInMap [LambdaDefaults, Download, Timeout]
+      MemorySize: !FindInMap [LambdaDefaults, Download, Memory]
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          ENVIRONMENT: !Ref Environment
+          S3_BUCKET: !If
+            - UseDefaultDataLakeBucket
+            - !Sub '${Brand}-data-lake-${AWS::AccountId}'
+            - !Ref DataLakeBucketName
+
+  BulkWorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/states/${Brand}-${BulkWorkflowName}'
+      RetentionInDays: 30
+
+  BulkWorkflowStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-${BulkWorkflowName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt BulkExportFunction.Arn
+                  - !GetAtt BulkPollFunction.Arn
+                  - !GetAtt BulkDownloadFunction.Arn
+
+  BulkWorkflowStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${Brand}-${BulkWorkflowName}'
+      RoleArn: !GetAtt BulkWorkflowStateMachineRole.Arn
+      LoggingConfiguration:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt BulkWorkflowLogGroup.Arn
+        IncludeExecutionData: true
+        Level: ALL
+      DefinitionString: !Sub |
+        {
+          "Comment": "Shopify bulk export workflow",
+          "StartAt": "StartExport",
+          "States": {
+            "StartExport": {
+              "Type": "Task",
+              "Resource": "${BulkExportFunction.Arn}",
+              "Parameters": {
+                "export_type.$": "$.export_type",
+                "start_date.$": "$.start_date",
+                "end_date.$": "$.end_date"
+              },
+              "ResultPath": "$.export",
+              "Next": "WaitBeforePoll"
+            },
+            "WaitBeforePoll": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "PollStatus"
+            },
+            "PollStatus": {
+              "Type": "Task",
+              "Resource": "${BulkPollFunction.Arn}",
+              "ResultPath": "$.status",
+              "Next": "StatusRouter"
+            },
+            "StatusRouter": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.status.status",
+                  "StringEquals": "COMPLETED",
+                  "Next": "DownloadResults"
+                },
+                {
+                  "Variable": "$.status.status",
+                  "StringEquals": "FAILED",
+                  "Next": "BulkFailed"
+                },
+                {
+                  "Variable": "$.status.status",
+                  "StringEquals": "CANCELED",
+                  "Next": "BulkFailed"
+                }
+              ],
+              "Default": "WaitBeforePoll"
+            },
+            "DownloadResults": {
+              "Type": "Task",
+              "Resource": "${BulkDownloadFunction.Arn}",
+              "Parameters": {
+                "url.$": "$.status.url",
+                "export_type.$": "$.export.export_type",
+                "start_date.$": "$.export.start_date",
+                "end_date.$": "$.export.end_date"
+              },
+              "ResultPath": "$.download",
+              "End": true
+            },
+            "BulkFailed": {
+              "Type": "Fail",
+              "Error": "ShopifyBulkOperationFailed",
+              "Cause": "Shopify bulk operation reported failure"
+            }
+          }
+        }
+
+  BulkWorkflowScheduleRole:
+    Type: AWS::IAM::Role
+    Condition: CreateSchedule
+    Properties:
+      RoleName: !Sub '${Brand}-${BulkWorkflowName}-schedule-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartStateMachine
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt BulkWorkflowStateMachine.Arn
+
+  BulkWorkflowScheduleRule:
+    Type: AWS::Events::Rule
+    Condition: CreateSchedule
+    Properties:
+      Name: !Sub '${Brand}-${BulkWorkflowName}-schedule'
+      Description: 'Optional schedule to trigger the Shopify bulk workflow'
+      ScheduleExpression: !Ref BulkWorkflowScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BulkWorkflowStateMachine.Arn
+          Id: BulkWorkflowStateMachineTarget
+          RoleArn: !GetAtt BulkWorkflowScheduleRole.Arn
+
+Outputs:
+  BulkExportFunctionName:
+    Description: 'Name of the bulk export Lambda function'
+    Value: !Ref BulkExportFunction
+  BulkPollFunctionName:
+    Description: 'Name of the bulk poll Lambda function'
+    Value: !Ref BulkPollFunction
+  BulkDownloadFunctionName:
+    Description: 'Name of the bulk download Lambda function'
+    Value: !Ref BulkDownloadFunction
+  BulkWorkflowStateMachineArn:
+    Description: 'ARN of the Shopify bulk Step Functions state machine'
+    Value: !GetAtt BulkWorkflowStateMachine.Arn

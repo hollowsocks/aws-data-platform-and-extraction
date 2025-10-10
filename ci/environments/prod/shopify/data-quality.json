@@ -1,0 +1,11 @@
+{
+  "Parameters": {
+    "Brand": "marsmen",
+    "DataQualityImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-data-quality-checker:latest",
+    "AlertsTopicArn": "arn:aws:sns:us-east-1:631046354185:marsmen-data-platform-alerts"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}

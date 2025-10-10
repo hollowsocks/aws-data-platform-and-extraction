@@ -1,0 +1,418 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudWatch alarms, dashboard, and alerting for Shopify ingestion platform'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier for resource naming'
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: 'Deployment environment label (dev/stage/prod)'
+
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: 'Optional email address to subscribe to critical alerts'
+
+  BulkWorkflowName:
+    Type: String
+    Default: shopify-bulk-orders
+    Description: 'Suffix of the bulk Step Functions state machine (without brand prefix)'
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+
+Mappings:
+  LambdaMap:
+    Order:
+      Name: shopify-order-processor
+    Customer:
+      Name: shopify-customer-processor
+    Product:
+      Name: shopify-product-processor
+    Cart:
+      Name: shopify-cart-processor
+    Recharge:
+      Name: recharge-event-processor
+    BulkExport:
+      Name: shopify-bulk-export
+    BulkPoll:
+      Name: shopify-bulk-poll
+    BulkDownload:
+      Name: shopify-bulk-download
+    DataQuality:
+      Name: data-quality-checker
+
+Resources:
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Brand}-data-platform-alerts'
+      DisplayName: !Sub '${Brand} Data Platform Alerts'
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
+
+  AlertsTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+      TopicArn: !Ref AlertsTopic
+
+  OrderLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-order-processor-errors'
+      AlarmDescription: 'Order processor Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, Order, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  CustomerLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-customer-processor-errors'
+      AlarmDescription: 'Customer processor Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, Customer, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  ProductLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-product-processor-errors'
+      AlarmDescription: 'Product processor Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, Product, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  CartLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-cart-processor-errors'
+      AlarmDescription: 'Cart processor Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, Cart, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  RechargeLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-recharge-errors'
+      AlarmDescription: 'Recharge webhook Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, Recharge, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  BulkExportLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-bulk-export-errors'
+      AlarmDescription: 'Bulk export Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, BulkExport, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  BulkPollLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-bulk-poll-errors'
+      AlarmDescription: 'Bulk poll Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, BulkPoll, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  BulkDownloadLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-bulk-download-errors'
+      AlarmDescription: 'Bulk download Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, BulkDownload, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  DataQualityLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-data-quality-errors'
+      AlarmDescription: 'Data quality Lambda reported an error in the last 5 minutes.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub
+            - '${Brand}-${FunctionSuffix}'
+            - FunctionSuffix: !FindInMap [LambdaMap, DataQuality, Name]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  OrderDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-order-dlq-depth'
+      AlarmDescription: 'Order EventBridge DLQ contains messages.'
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${Brand}-shopify-order-events-dlq'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  CustomerDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-customer-dlq-depth'
+      AlarmDescription: 'Customer EventBridge DLQ contains messages.'
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${Brand}-shopify-customer-events-dlq'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  ProductDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-product-dlq-depth'
+      AlarmDescription: 'Product EventBridge DLQ contains messages.'
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${Brand}-shopify-product-events-dlq'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  CartDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-cart-dlq-depth'
+      AlarmDescription: 'Cart EventBridge DLQ contains messages.'
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${Brand}-shopify-cart-events-dlq'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  BulkWorkflowFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Brand}-bulk-workflow-failed'
+      AlarmDescription: 'Shopify bulk Step Functions execution reported a failure.'
+      Namespace: AWS/States
+      MetricName: ExecutionsFailed
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${Brand}-${BulkWorkflowName}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  DataPlatformDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${Brand}-data-platform'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda Error Overview",
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-order-processor" ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-customer-processor" ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-product-processor" ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-cart-processor" ]
+                ],
+                "stat": "Sum",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Bulk Pipeline Health",
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-bulk-export" ],
+                  [ ".", ".", ".", "${Brand}-shopify-bulk-poll" ],
+                  [ ".", ".", ".", "${Brand}-shopify-bulk-download" ]
+                ],
+                "stat": "Sum",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Recharge Lambda Errors",
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-recharge-event-processor" ]
+                ],
+                "stat": "Sum",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Event DLQ Depth",
+                "metrics": [
+                  [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${Brand}-shopify-order-events-dlq" ],
+                  [ ".", ".", ".", "${Brand}-shopify-customer-events-dlq" ],
+                  [ ".", ".", ".", "${Brand}-shopify-product-events-dlq" ],
+                  [ ".", ".", ".", "${Brand}-shopify-cart-events-dlq" ]
+                ],
+                "stat": "Maximum",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  AlertsTopicArn:
+    Description: 'Primary SNS topic for platform alerts'
+    Value: !Ref AlertsTopic

@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB hot-cache tables for Shopify ingestion'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used in DynamoDB table names'
+
+Resources:
+  OrdersCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-orders-cache'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: order_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+        - AttributeName: customer_email
+          AttributeType: S
+        - AttributeName: order_number
+          AttributeType: S
+      KeySchema:
+        - AttributeName: order_id
+          KeyType: HASH
+        - AttributeName: created_at
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: customer-email-index
+          KeySchema:
+            - AttributeName: customer_email
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: order-number-index
+          KeySchema:
+            - AttributeName: order_number
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: orders
+
+  CustomersCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-customers-cache'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: customer_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: customer_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: customers
+
+  AbandonedCartsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-abandoned-carts'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: checkout_token
+          AttributeType: S
+      KeySchema:
+        - AttributeName: checkout_token
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: abandoned-carts
+
+  SubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-subscriptions'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: subscription_id
+          AttributeType: S
+        - AttributeName: customer_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: subscription_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: customer-id-index
+          KeySchema:
+            - AttributeName: customer_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: subscriptions
+
+  SubscriptionChargesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-subscription-charges'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: charge_id
+          AttributeType: S
+        - AttributeName: subscription_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: charge_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: subscription-id-index
+          KeySchema:
+            - AttributeName: subscription_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: subscription-charges
+
+  PaymentAttemptsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-payment-attempts'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: charge_id
+          AttributeType: S
+        - AttributeName: customer_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: charge_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: customer-id-index
+          KeySchema:
+            - AttributeName: customer_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: payment-attempts
+
+  InvoicePaymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-invoice-payments'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: invoice_id
+          AttributeType: S
+        - AttributeName: subscription_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: invoice_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: subscription-id-index
+          KeySchema:
+            - AttributeName: subscription_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: invoice-payments
+
+  DisputesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Brand}-disputes'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: dispute_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: dispute_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: false
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Dataset
+          Value: disputes
+
+Outputs:
+  OrdersCacheTableName:
+    Value: !Ref OrdersCacheTable
+    Export:
+      Name: !Sub '${Brand}-orders-cache-table'
+  CustomersCacheTableName:
+    Value: !Ref CustomersCacheTable
+    Export:
+      Name: !Sub '${Brand}-customers-cache-table'
+  AbandonedCartsTableName:
+    Value: !Ref AbandonedCartsTable
+    Export:
+      Name: !Sub '${Brand}-abandoned-carts-table'
+  SubscriptionsTableName:
+    Value: !Ref SubscriptionsTable
+    Export:
+      Name: !Sub '${Brand}-subscriptions-table'
+  SubscriptionChargesTableName:
+    Value: !Ref SubscriptionChargesTable
+    Export:
+      Name: !Sub '${Brand}-subscription-charges-table'
+  PaymentAttemptsTableName:
+    Value: !Ref PaymentAttemptsTable
+    Export:
+      Name: !Sub '${Brand}-payment-attempts-table'
+  InvoicePaymentsTableName:
+    Value: !Ref InvoicePaymentsTable
+    Export:
+      Name: !Sub '${Brand}-invoice-payments-table'
+  DisputesTableName:
+    Value: !Ref DisputesTable
+    Export:
+      Name: !Sub '${Brand}-disputes-table'

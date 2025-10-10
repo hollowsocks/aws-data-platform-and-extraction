@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Glue ETL jobs for Shopify ingestion data lake'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier for resource naming'
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: 'Environment label (dev/stage/prod)'
+
+  GlueJobName:
+    Type: String
+    Default: shopify-orders-enriched
+    Description: 'Name of the primary Glue job'
+
+  ScriptBucket:
+    Type: String
+    Description: 'S3 bucket that stores the Glue ETL script'
+
+  ScriptKey:
+    Type: String
+    Description: 'S3 key for the Glue ETL script (e.g., glue/orders_enriched_job.py)'
+
+  DataLakeBucketName:
+    Type: String
+    Default: ''
+    Description: 'Override for the data lake bucket; defaults to ${Brand}-data-lake-${AccountId}'
+
+  TempDirPath:
+    Type: String
+    Default: ''
+    Description: 'Optional S3 path for Glue temporary data (defaults to data lake tmp prefix)'
+
+  WorkerType:
+    Type: String
+    Default: G.1X
+    AllowedValues: [G.025X, G.1X, G.2X, G.4X, G.8X]
+    Description: 'Glue job worker type'
+
+  NumberOfWorkers:
+    Type: Number
+    Default: 2
+    Description: 'Number of workers allocated to the Glue job'
+
+  ScheduleExpression:
+    Type: String
+    Default: ''
+    Description: 'Optional Glue trigger schedule expression (cron or rate); leave blank for on-demand'
+
+Conditions:
+  UseDefaultBucket: !Equals [!Ref DataLakeBucketName, '']
+  UseDefaultTempDir: !Equals [!Ref TempDirPath, '']
+  CreateSchedule: !Not [!Equals [!Ref ScheduleExpression, '']]
+
+Resources:
+  GlueJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-${Environment}-glue-job-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueJobDataLakeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !If
+                    - UseDefaultBucket
+                    - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}'
+                    - !Sub 'arn:aws:s3:::${DataLakeBucketName}'
+                  - !If
+                    - UseDefaultBucket
+                    - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+                    - !Sub 'arn:aws:s3:::${DataLakeBucketName}/*'
+        - PolicyName: GlueJobScriptsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${ScriptBucket}/${ScriptKey}'
+
+  OrdersEnrichedJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Ref GlueJobName
+      GlueVersion: '4.0'
+      Role: !GetAtt GlueJobRole.Arn
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub 's3://${ScriptBucket}/${ScriptKey}'
+        PythonVersion: '3'
+      DefaultArguments:
+        --job-language: python
+        --brand: !Ref Brand
+        --raw-path: !If
+          - UseDefaultBucket
+          - !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/raw/shopify/orders/events'
+          - !Sub 's3://${DataLakeBucketName}/raw/shopify/orders/events'
+        --processed-path: !If
+          - UseDefaultBucket
+          - !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/processed/shopify/orders_enriched'
+          - !Sub 's3://${DataLakeBucketName}/processed/shopify/orders_enriched'
+        --TempDir: !If
+          - UseDefaultTempDir
+          - !If
+              - UseDefaultBucket
+              - !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/tmp/glue/'
+              - !Sub 's3://${DataLakeBucketName}/tmp/glue/'
+          - !Ref TempDirPath
+      WorkerType: !Ref WorkerType
+      NumberOfWorkers: !Ref NumberOfWorkers
+      Timeout: 60
+      Tags:
+        Brand: !Ref Brand
+        Environment: !Ref Environment
+
+  OrdersEnrichedTrigger:
+    Type: AWS::Glue::Trigger
+    Condition: CreateSchedule
+    Properties:
+      Name: !Sub '${Brand}-${Environment}-orders-enriched-schedule'
+      Type: SCHEDULED
+      Schedule: !Ref ScheduleExpression
+      StartOnCreation: true
+      Actions:
+        - JobName: !Ref OrdersEnrichedJob
+      Description: 'Scheduled trigger for the Shopify orders enrichment Glue job'
+
+Outputs:
+  GlueJobNameOutput:
+    Description: 'Name of the Glue orders enrichment job'
+    Value: !Ref OrdersEnrichedJob
+  GlueJobRoleArn:
+    Description: 'IAM role ARN for the Glue job'
+    Value: !GetAtt GlueJobRole.Arn

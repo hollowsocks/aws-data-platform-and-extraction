@@ -1,0 +1,12 @@
+{
+  "Parameters": {
+    "Brand": "marsmen",
+    "RechargeProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-recharge-event-processor:latest",
+    "RechargeWebhookSecretArn": "arn:aws:secretsmanager:us-east-1:631046354185:secret:marsmen/recharge/webhook-kn4DWS",
+    "AlertTopicArn": "arn:aws:sns:us-east-1:631046354185:marsmen-data-platform-alerts"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}

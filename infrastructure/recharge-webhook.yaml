@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Recharge webhook ingestion path and supporting infrastructure'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used for resource names'
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: 'Deployment environment label'
+
+  DataLakeBucketName:
+    Type: String
+    Default: ''
+    Description: 'S3 bucket for raw Recharge events; defaults to ${Brand}-data-lake-${AccountId}'
+
+  RechargeProcessorImageUri:
+    Type: String
+    Description: 'ECR image URI for the Recharge event processor Lambda'
+
+  RechargeWebhookSecretArn:
+    Type: String
+    Description: 'Secrets Manager ARN that stores the Recharge webhook shared secret under SecretString key webhook_secret'
+
+  SubscriptionTableName:
+    Type: String
+    Default: ''
+    Description: 'DynamoDB table for subscriptions; defaults to ${Brand}-subscriptions'
+
+  ChargesTableName:
+    Type: String
+    Default: ''
+    Description: 'DynamoDB table for charges; defaults to ${Brand}-subscription-charges'
+
+  AlertTopicArn:
+    Type: String
+    Default: ''
+    Description: 'Optional SNS topic ARN for alerting on cancellations and charge failures'
+
+  ApiStageName:
+    Type: String
+    Default: prod
+    Description: 'HTTP API stage name'
+
+Conditions:
+  UseDefaultBucket: !Equals [!Ref DataLakeBucketName, '']
+  UseDefaultSubscriptionTable: !Equals [!Ref SubscriptionTableName, '']
+  UseDefaultChargesTable: !Equals [!Ref ChargesTableName, '']
+  HasAlertTopic: !Not [!Equals [!Ref AlertTopicArn, '']]
+
+Resources:
+  RechargeProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-recharge-event-processor'
+      RetentionInDays: 30
+
+  RechargeProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-recharge-event-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RechargeS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !If
+                  - UseDefaultBucket
+                  - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::${DataLakeBucketName}/*'
+        - PolicyName: RechargeDynamoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !If
+                    - UseDefaultSubscriptionTable
+                    - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-subscriptions'
+                    - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SubscriptionTableName}'
+                  - !If
+                    - UseDefaultChargesTable
+                    - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-subscription-charges'
+                    - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ChargesTableName}'
+        - !If
+            - HasAlertTopic
+            - PolicyName: RechargeAlerts
+              PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - sns:Publish
+                    Resource: !Ref AlertTopicArn
+            - !Ref AWS::NoValue
+
+  RechargeProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-recharge-event-processor'
+      Description: 'Processes Recharge subscription and billing webhooks'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref RechargeProcessorImageUri
+      Role: !GetAtt RechargeProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !If
+            - UseDefaultBucket
+            - !Sub '${Brand}-data-lake-${AWS::AccountId}'
+            - !Ref DataLakeBucketName
+          SUBSCRIPTION_TABLE: !If
+            - UseDefaultSubscriptionTable
+            - !Sub '${Brand}-subscriptions'
+            - !Ref SubscriptionTableName
+          CHARGES_TABLE: !If
+            - UseDefaultChargesTable
+            - !Sub '${Brand}-subscription-charges'
+            - !Ref ChargesTableName
+          ALERT_TOPIC_ARN: !If
+            - HasAlertTopic
+            - !Ref AlertTopicArn
+            - ''
+          RECHARGE_WEBHOOK_SECRET: !Sub '{{resolve:secretsmanager:${RechargeWebhookSecretArn}:SecretString:webhook_secret}}'
+
+  RechargeApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${Brand}-recharge-webhook'
+      RetentionInDays: 30
+
+  RechargeWebhookApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${Brand}-recharge-webhook-api'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowMethods:
+          - POST
+        AllowOrigins:
+          - '*'
+
+  RechargeWebhookIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref RechargeWebhookApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RechargeProcessorFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  RechargeWebhookRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RechargeWebhookApi
+      RouteKey: 'POST /recharge/webhook'
+      Target: !Sub 'integrations/${RechargeWebhookIntegration}'
+
+  RechargeWebhookStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref RechargeWebhookApi
+      StageName: !Ref ApiStageName
+      AutoDeploy: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt RechargeApiLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","routeKey":"$context.routeKey","status":$context.status,"error":"$context.error.message"}'
+
+  RechargeInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RechargeProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RechargeWebhookApi}/${ApiStageName}/POST/recharge/webhook'
+
+Outputs:
+  RechargeWebhookInvokeUrl:
+    Description: 'Invoke URL for the Recharge webhook entrypoint'
+    Value: !Sub 'https://${RechargeWebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/recharge/webhook'
+  RechargeProcessorFunctionName:
+    Description: 'Name of the Recharge webhook Lambda function'
+    Value: !Ref RechargeProcessorFunction

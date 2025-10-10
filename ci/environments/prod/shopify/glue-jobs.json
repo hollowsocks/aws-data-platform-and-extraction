@@ -1,0 +1,11 @@
+{
+  "Parameters": {
+    "Brand": "marsmen",
+    "ScriptBucket": "marsmen-data-lake-631046354185",
+    "ScriptKey": "glue/orders_enriched_job.py"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}

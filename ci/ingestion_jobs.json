@@ -1,0 +1,54 @@
+{
+  "defaults": {
+    "brand": "marsmen",
+    "region": "us-east-1",
+    "account_id": "631046354185"
+  },
+  "jobs": {
+    "shopify": {
+      "lambdas": [
+        "shopify-order-processor",
+        "shopify-customer-processor",
+        "shopify-product-processor",
+        "shopify-cart-processor",
+        "recharge-event-processor",
+        "shopify-bulk-export",
+        "shopify-bulk-poll",
+        "shopify-bulk-download",
+        "data-quality-checker"
+      ],
+      "stacks": [
+        {
+          "name": "eventbridge",
+          "template": "infrastructure/eventbridge-rules.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        },
+        {
+          "name": "recharge",
+          "template": "infrastructure/recharge-webhook.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        },
+        {
+          "name": "bulk-workflow",
+          "template": "infrastructure/shopify-bulk-workflow.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        },
+        {
+          "name": "monitoring",
+          "template": "infrastructure/monitoring.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        },
+        {
+          "name": "data-quality",
+          "template": "infrastructure/data-quality.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        },
+        {
+          "name": "glue-jobs",
+          "template": "infrastructure/glue-jobs.yaml",
+          "capabilities": ["CAPABILITY_NAMED_IAM"]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+# Shopify App Configuration for EventBridge Data Platform
+# This app configures real-time webhook delivery to AWS EventBridge
+
+name = "Marsmen Data Platform"
+client_id = "4bc5548b8c12fee05ea56760bdfc6f34"
+application_url = "https://c9095d-2.myshopify.com"
+embedded = true
+handle = "marsmen-data-platform"
+
+[access_scopes]
+# Required scopes for reading order, customer, product, and fulfillment data
+scopes = "read_orders,read_customers,read_products,read_fulfillments,read_inventory"
+
+[webhooks]
+api_version = "2024-10"
+
+  # =============================================================================
+  # AWS EventBridge Webhooks - Data Ingestion Platform
+  # =============================================================================
+  # ARN Format: arn:aws:events:<AWS-REGION>::event-source/aws.partner/shopify.com/286352670721/marsmen-production
+  # AWS Account: 631046354185
+  # AWS Region: us-east-1
+  # Event Source Name: Replace marsmen-production with unique name from Partners dashboard
+  # =============================================================================
+
+  # Orders - Real-time order creation and updates
+  [[webhooks.subscriptions]]
+  topics = ["orders/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/updated"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/cancelled"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/fulfilled"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Customers - Customer lifecycle events
+  [[webhooks.subscriptions]]
+  topics = ["customers/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customers/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Products - Product and inventory changes
+  [[webhooks.subscriptions]]
+  topics = ["products/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["products/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Fulfillments - Shipping events
+  [[webhooks.subscriptions]]
+  topics = ["fulfillments/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillments/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Carts & Checkouts - Abandoned cart tracking
+  [[webhooks.subscriptions]]
+  topics = ["carts/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["carts/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["checkouts/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["checkouts/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # =============================================================================
+  # Mandatory App Lifecycle Webhooks
+  # =============================================================================
+  # These are handled by the app itself (not EventBridge)
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"

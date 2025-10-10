@@ -1,0 +1,48 @@
+{
+  "Rules": [
+    {
+      "Id": "TransitionRawEventsToIA",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "raw/shopify/orders/events/"
+      },
+      "Transitions": [
+        {
+          "Days": 90,
+          "StorageClass": "STANDARD_IA"
+        },
+        {
+          "Days": 180,
+          "StorageClass": "GLACIER"
+        }
+      ]
+    },
+    {
+      "Id": "DeleteProcessedAfter2Years",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "processed/"
+      },
+      "Expiration": {
+        "Days": 730
+      }
+    },
+    {
+      "Id": "TransitionSnapshotsToIA",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "raw/shopify/orders/snapshots/"
+      },
+      "Transitions": [
+        {
+          "Days": 30,
+          "StorageClass": "STANDARD_IA"
+        },
+        {
+          "Days": 365,
+          "StorageClass": "GLACIER_IR"
+        }
+      ]
+    }
+  ]
+}

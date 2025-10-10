@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Shopify Data Lake S3 buckets and configuration'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used for naming data lake resources'
+
+Resources:
+  DataLakeLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Brand}-data-lake-logs-${AWS::AccountId}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Environment
+          Value: !Sub '${Brand}-platform'
+
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Brand}-data-lake-${AWS::AccountId}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref DataLakeLogBucket
+        LogFilePrefix: !Sub '${Brand}/'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionRawEventsToIA
+            Status: Enabled
+            Prefix: raw/shopify/orders/events/
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+              - StorageClass: GLACIER
+                TransitionInDays: 180
+          - Id: TransitionSnapshotsToIA
+            Status: Enabled
+            Prefix: raw/shopify/orders/snapshots/
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER_IR
+                TransitionInDays: 365
+          - Id: DeleteProcessedAfter2Years
+            Status: Enabled
+            Prefix: processed/
+            ExpirationInDays: 730
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Application
+          Value: shopify-ingestion
+        - Key: Environment
+          Value: !Sub '${Brand}-platform'
+
+Outputs:
+  DataLakeBucketName:
+    Value: !Ref DataLakeBucket
+    Export:
+      Name: !Sub '${Brand}-data-lake-bucket'
+  DataLakeLogBucketName:
+    Value: !Ref DataLakeLogBucket
+    Export:
+      Name: !Sub '${Brand}-data-lake-log-bucket'

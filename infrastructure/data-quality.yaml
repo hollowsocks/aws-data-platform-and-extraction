@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Data quality Lambda deployment with scheduled execution'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used in resource names'
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: 'Environment label (dev/stage/prod)'
+
+  DataQualityImageUri:
+    Type: String
+    Description: 'ECR image URI for the data quality Lambda container'
+
+  DataLakeBucketName:
+    Type: String
+    Default: ''
+    Description: 'Override for the data lake bucket; defaults to ${Brand}-data-lake-${AccountId}'
+
+  OrdersTableName:
+    Type: String
+    Default: ''
+    Description: 'Override for the orders DynamoDB table; defaults to ${Brand}-orders-cache'
+
+  AlertsTopicArn:
+    Type: String
+    Default: ''
+    Description: 'Optional SNS topic ARN for data quality alerts'
+
+  ScheduleExpression:
+    Type: String
+    Default: rate(1 hour)
+    Description: 'EventBridge schedule expression for running the data quality checks'
+
+Conditions:
+  UseDefaultBucket: !Equals [!Ref DataLakeBucketName, '']
+  UseDefaultOrdersTable: !Equals [!Ref OrdersTableName, '']
+  HasAlertsTopic: !Not [!Equals [!Ref AlertsTopicArn, '']]
+
+Resources:
+  DataQualityLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Brand}-data-quality-checker'
+      RetentionInDays: 30
+
+  DataQualityFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-data-quality-checker-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DataQualityS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:PutObject
+                Resource:
+                  - !If
+                    - UseDefaultBucket
+                    - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}'
+                    - !Sub 'arn:aws:s3:::${DataLakeBucketName}'
+                  - !If
+                    - UseDefaultBucket
+                    - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+                    - !Sub 'arn:aws:s3:::${DataLakeBucketName}/*'
+        - PolicyName: DataQualityDynamoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:Scan
+                Resource: !If
+                  - UseDefaultOrdersTable
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Brand}-orders-cache'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OrdersTableName}'
+        - PolicyName: DataQualityMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': !Sub '${Brand}/DataQuality'
+        - !If
+          - HasAlertsTopic
+          - PolicyName: DataQualityAlerts
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sns:Publish
+                  Resource: !Ref AlertsTopicArn
+          - !Ref AWS::NoValue
+
+  DataQualityFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Brand}-data-quality-checker'
+      Description: 'Runs scheduled data quality checks over Shopify ingestion data'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref DataQualityImageUri
+      Role: !GetAtt DataQualityFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRAND: !Ref Brand
+          S3_BUCKET: !If
+            - UseDefaultBucket
+            - !Sub '${Brand}-data-lake-${AWS::AccountId}'
+            - !Ref DataLakeBucketName
+          ORDERS_TABLE: !If
+            - UseDefaultOrdersTable
+            - !Sub '${Brand}-orders-cache'
+            - !Ref OrdersTableName
+          ALERT_TOPIC_ARN: !If
+            - HasAlertsTopic
+            - !Ref AlertsTopicArn
+            - ''
+
+  DataQualityScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Brand}-data-quality-schedule'
+      Description: 'Schedule for running data quality checks'
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DataQualityFunction.Arn
+          Id: DataQualityFunctionTarget
+
+  DataQualityInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DataQualityFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DataQualityScheduleRule.Arn
+
+Outputs:
+  DataQualityFunctionName:
+    Description: 'Name of the data quality Lambda function'
+    Value: !Ref DataQualityFunction
+  DataQualityScheduleArn:
+    Description: 'ARN of the EventBridge schedule rule'
+    Value: !GetAtt DataQualityScheduleRule.Arn

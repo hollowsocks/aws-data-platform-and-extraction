@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Glue Data Catalog resources for Shopify ingestion'
+
+Parameters:
+  Brand:
+    Type: String
+    Default: marsmen
+    Description: 'Brand identifier used in resource names'
+
+Resources:
+  ShopifyGlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub '${Brand}_shopify'
+        Description: 'Glue database for Shopify ingestion data lake'
+
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Brand}-glue-crawler-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueCrawlerS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::${Brand}-data-lake-${AWS::AccountId}/*'
+
+  RawOrdersEventsCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub '${Brand}-raw-orders-events'
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: !Ref ShopifyGlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/raw/shopify/orders/events/'
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      Schedule:
+        ScheduleExpression: 'cron(0 2 * * ? *)'
+      Tags:
+        Brand: !Ref Brand
+        Dataset: raw-orders-events
+
+  ProcessedOrdersCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub '${Brand}-processed-orders'
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: !Ref ShopifyGlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/processed/shopify/orders_enriched/'
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      Tags:
+        Brand: !Ref Brand
+        Dataset: processed-orders
+
+  CuratedSubscriptionOrdersCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub '${Brand}-curated-subscription-orders'
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: !Ref ShopifyGlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub 's3://${Brand}-data-lake-${AWS::AccountId}/curated/subscription_orders/'
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      Tags:
+        Brand: !Ref Brand
+        Dataset: curated-subscription-orders
+
+Outputs:
+  GlueDatabaseName:
+    Value: !Sub '${Brand}_shopify'
+    Export:
+      Name: !Sub '${Brand}-shopify-glue-database'
+  GlueCrawlerRoleArn:
+    Value: !GetAtt GlueCrawlerRole.Arn
+    Export:
+      Name: !Sub '${Brand}-glue-crawler-role-arn'

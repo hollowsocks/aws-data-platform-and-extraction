@@ -1,0 +1,54 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      ingestion_job:
+        description: 'Ingestion job to deploy (use job key or "all")'
+        default: 'all'
+        required: false
+
+env:
+  AUTO_DEPLOY_ENABLED: ${{ github.event_name == 'workflow_dispatch' && 'true' || vars.AUTO_DEPLOY_INFRASTRUCTURE || 'false' }}
+  SELECTED_INGESTION_JOB: ${{ github.event_name == 'workflow_dispatch' && inputs.ingestion_job || vars.AUTO_DEPLOY_INGESTION_JOB || 'all' }}
+
+jobs:
+  compute-matrix:
+    if: ${{ env.AUTO_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.render.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: render
+        run: |
+          python .github/scripts/render_matrix.py > matrix.json
+          echo "include=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+        env:
+          INGESTION_JOB: ${{ env.SELECTED_INGESTION_JOB }}
+
+  deploy:
+    needs: compute-matrix
+    if: ${{ env.AUTO_DEPLOY_ENABLED == 'true' && needs.compute-matrix.outputs.include != '[]' && needs.compute-matrix.outputs.include != '' }}
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.compute-matrix.outputs.include) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+      - name: Deploy CloudFormation stacks
+        env:
+          STACKS: ${{ toJSON(matrix.stacks) }}
+          BRAND: ${{ matrix.brand }}
+          JOB: ${{ matrix.job }}
+          ENVIRONMENT: prod
+          REGION: ${{ matrix.region }}
+        run: python .github/scripts/deploy_stacks.py

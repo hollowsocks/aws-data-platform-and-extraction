@@ -1,0 +1,9 @@
+{
+  "Parameters": {
+    "Brand": "marsmen"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}

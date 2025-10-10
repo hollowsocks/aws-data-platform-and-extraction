@@ -1,0 +1,15 @@
+{
+  "Parameters": {
+    "Brand": "marsmen",
+    "PartnerEventSourceName": "aws.partner/shopify.com/286352670721/marsmen-production",
+    "OrderProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-order-processor:latest",
+    "FulfillmentProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-order-processor:latest",
+    "CustomerProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-customer-processor:latest",
+    "ProductProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-product-processor:latest",
+    "CartProcessorImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-cart-processor:latest"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}

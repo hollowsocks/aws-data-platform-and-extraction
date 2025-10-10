@@ -1,0 +1,14 @@
+{
+  "Parameters": {
+    "Brand": "marsmen",
+    "ShopifyShopDomain": "c9095d-2.myshopify.com",
+    "ShopifyAccessTokenSecretArn": "arn:aws:secretsmanager:us-east-1:631046354185:secret:marsmen/shopify-api/production-A5bdQY",
+    "BulkExportImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-bulk-export:latest",
+    "BulkPollImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-bulk-poll:latest",
+    "BulkDownloadImageUri": "631046354185.dkr.ecr.us-east-1.amazonaws.com/marsmen-shopify-bulk-download:latest"
+  },
+  "Tags": {
+    "Environment": "prod",
+    "Owner": "data-platform"
+  }
+}
