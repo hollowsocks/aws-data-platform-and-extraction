@@ -10,11 +10,6 @@ Parameters:
     Type: String
     Description: 'Shopify partner event source name (aws.partner/shopify.com/[shop-id]/default)'
 
-  EventBusName:
-    Type: String
-    Default: marsmen-shopify-partner-bus
-    Description: 'Friendly name for the partner event bus'
-
   OrderProcessorImageUri:
     Type: String
     Description: 'ECR image URI for the order processor Lambda'
@@ -39,7 +34,7 @@ Resources:
   ShopifyEventBus:
     Type: AWS::Events::EventBus
     Properties:
-      Name: !Ref EventBusName
+      Name: !Ref PartnerEventSourceName
       EventSourceName: !Ref PartnerEventSourceName
       Tags:
         - Key: Brand
