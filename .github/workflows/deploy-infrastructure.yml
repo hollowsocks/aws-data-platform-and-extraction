@@ -11,6 +11,10 @@ on:
         default: 'all'
         required: false
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   compute-matrix:
     runs-on: ubuntu-latest
