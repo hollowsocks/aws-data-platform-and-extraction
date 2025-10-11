@@ -11,28 +11,51 @@ on:
         default: 'all'
         required: false
 
-env:
-  AUTO_BUILD_ENABLED: ${{ github.event_name == 'workflow_dispatch' && 'true' || vars.AUTO_BUILD_LAMBDAS || 'false' }}
-  SELECTED_INGESTION_JOB: ${{ github.event_name == 'workflow_dispatch' && inputs.ingestion_job || vars.AUTO_BUILD_INGESTION_JOB || 'all' }}
-
 jobs:
   compute-matrix:
-    if: ${{ env.AUTO_BUILD_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     outputs:
-      include: ${{ steps.render.outputs.include }}
+      include: ${{ steps.fanout.outputs.include }}
+      enabled: ${{ steps.determine.outputs.enabled }}
     steps:
-      - uses: actions/checkout@v4
-      - id: render
+      - id: determine
         run: |
-          python .github/scripts/render_matrix.py > matrix.json
-          echo "include=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            job="${{ github.event.inputs.ingestion_job }}"
+            if [ -z "$job" ]; then
+              job="all"
+            fi
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "job=$job" >> "$GITHUB_OUTPUT"
+          elif [ "${{ vars.AUTO_BUILD_LAMBDAS }}" = "true" ]; then
+            job="${{ vars.AUTO_BUILD_INGESTION_JOB }}"
+            if [ -z "$job" ]; then
+              job="all"
+            fi
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "job=$job" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "job=all" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.determine.outputs.enabled == 'true'
+      - id: fanout
+        if: always()
+        run: |
+          if [ "$ENABLED" = "true" ]; then
+            python .github/scripts/render_matrix.py > matrix.json
+            echo "include=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "include=[]" >> "$GITHUB_OUTPUT"
+          fi
         env:
-          INGESTION_JOB: ${{ env.SELECTED_INGESTION_JOB }}
+          ENABLED: ${{ steps.determine.outputs.enabled }}
+          INGESTION_JOB: ${{ steps.determine.outputs.job }}
 
   build:
     needs: compute-matrix
-    if: ${{ env.AUTO_BUILD_ENABLED == 'true' && needs.compute-matrix.outputs.include != '[]' && needs.compute-matrix.outputs.include != '' }}
+    if: ${{ needs.compute-matrix.outputs.include != '[]' && needs.compute-matrix.outputs.include != '' }}
     strategy:
       matrix:
         include: ${{ fromJSON(needs.compute-matrix.outputs.include) }}
