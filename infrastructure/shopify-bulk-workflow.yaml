@@ -221,6 +221,11 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/states/${Brand}-${BulkWorkflowName}'
       RetentionInDays: 30
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   BulkWorkflowStateMachineRole:
     Type: AWS::IAM::Role
@@ -245,6 +250,28 @@ Resources:
                   - !GetAtt BulkExportFunction.Arn
                   - !GetAtt BulkPollFunction.Arn
                   - !GetAtt BulkDownloadFunction.Arn
+        - PolicyName: WorkflowLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeDestinations
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:PutRetentionPolicy
+                  - logs:DeleteRetentionPolicy
+                Resource: !GetAtt BulkWorkflowLogGroup.Arn
 
   BulkWorkflowStateMachine:
     Type: AWS::StepFunctions::StateMachine
