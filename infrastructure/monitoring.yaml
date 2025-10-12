@@ -361,6 +361,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Lambda Error Overview",
+                "region": "${AWS::Region}",
                 "metrics": [
                   [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-order-processor" ],
                   [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-customer-processor" ],
@@ -375,6 +376,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Bulk Pipeline Health",
+                "region": "${AWS::Region}",
                 "metrics": [
                   [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-shopify-bulk-export" ],
                   [ ".", ".", ".", "${Brand}-shopify-bulk-poll" ],
@@ -388,6 +390,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Recharge Lambda Errors",
+                "region": "${AWS::Region}",
                 "metrics": [
                   [ "AWS/Lambda", "Errors", "FunctionName", "${Brand}-recharge-event-processor" ]
                 ],
@@ -399,6 +402,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Event DLQ Depth",
+                "region": "${AWS::Region}",
                 "metrics": [
                   [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${Brand}-shopify-order-events-dlq" ],
                   [ ".", ".", ".", "${Brand}-shopify-customer-events-dlq" ],
