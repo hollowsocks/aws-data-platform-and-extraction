@@ -88,10 +88,10 @@ def delete_stack(stack_name: str, region: str | None) -> None:
     run(wait_cmd)
 
 
-def ensure_stack_ready(stack_name: str, region: str | None) -> None:
+def ensure_stack_ready(stack_name: str, region: str | None) -> str | None:
     status = get_stack_status(stack_name, region)
     if status is None:
-        return
+        return None
 
     if status in TERMINAL_FAILURE_STATES:
         print(
@@ -99,7 +99,7 @@ def ensure_stack_ready(stack_name: str, region: str | None) -> None:
             file=sys.stderr,
         )
         delete_stack(stack_name, region)
-        return
+        return None
 
     if status.endswith("_IN_PROGRESS"):
         raise SystemExit(
@@ -107,6 +107,24 @@ def ensure_stack_ready(stack_name: str, region: str | None) -> None:
         )
 
     # For all other healthy states (CREATE_COMPLETE, UPDATE_COMPLETE, etc.) we let 'deploy' perform an update.
+    return status
+
+
+def delete_partner_event_bus(name: str, region: str | None) -> None:
+    describe_cmd = ["aws", "events", "describe-event-bus", "--name", name]
+    if region:
+        describe_cmd.extend(["--region", region])
+
+    result = run(describe_cmd, check=False, capture_output=True)
+    if result.returncode != 0:
+        return
+
+    print(f"Deleting existing partner event bus {name} prior to stack deployment.", file=sys.stderr)
+
+    delete_cmd = ["aws", "events", "delete-event-bus", "--name", name]
+    if region:
+        delete_cmd.extend(["--region", region])
+    run(delete_cmd)
 
 
 def main() -> None:
@@ -127,11 +145,19 @@ def main() -> None:
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template}")
 
-        ensure_stack_ready(stack_name, region)
+        existing_status = ensure_stack_ready(stack_name, region)
 
         capabilities = stack.get("capabilities", [])
         parameter_path = Path("ci") / "environments" / environment / job / f"{stack['name']}.json"
         parameters, tags = load_parameter_file(parameter_path)
+
+        partner_source_name = parameters.get("PartnerEventSourceName")
+        if (
+            stack.get("name") == "eventbridge"
+            and partner_source_name
+            and existing_status is None
+        ):
+            delete_partner_event_bus(partner_source_name, region)
 
         cmd: list[str] = [
             "aws",
