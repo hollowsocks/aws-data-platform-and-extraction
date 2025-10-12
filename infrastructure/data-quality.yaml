@@ -10,7 +10,7 @@ Parameters:
   Environment:
     Type: String
     Default: prod
-    Description: 'Environment label (dev/stage/prod)'
+    Description: 'Deployment environment label'
 
   DataQualityImageUri:
     Type: String
@@ -19,12 +19,12 @@ Parameters:
   DataLakeBucketName:
     Type: String
     Default: ''
-    Description: 'Override for the data lake bucket; defaults to ${Brand}-data-lake-${AccountId}'
+    Description: 'Override for the data lake bucket; defaults to the Brand-data-lake-AccountId naming pattern'
 
   OrdersTableName:
     Type: String
     Default: ''
-    Description: 'Override for the orders DynamoDB table; defaults to ${Brand}-orders-cache'
+    Description: 'Override for the orders DynamoDB table; defaults to the Brand-orders-cache naming pattern'
 
   AlertsTopicArn:
     Type: String
@@ -47,6 +47,11 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Brand}-data-quality-checker'
       RetentionInDays: 30
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   DataQualityFunctionRole:
     Type: AWS::IAM::Role
@@ -115,6 +120,11 @@ Resources:
                     - sns:Publish
                   Resource: !Ref AlertsTopicArn
           - !Ref AWS::NoValue
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   DataQualityFunction:
     Type: AWS::Lambda::Function
@@ -142,6 +152,11 @@ Resources:
             - HasAlertsTopic
             - !Ref AlertsTopicArn
             - ''
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   DataQualityScheduleRule:
     Type: AWS::Events::Rule

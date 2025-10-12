@@ -154,7 +154,7 @@ Resources:
             Arn: !GetAtt OrderEventsDLQ.Arn
           RetryPolicy:
             MaximumRetryAttempts: 3
-            MaximumEventAge: 3600
+            MaximumEventAgeInSeconds: 3600
 
   FulfillmentProcessorRole:
     Type: AWS::IAM::Role
@@ -394,7 +394,7 @@ Resources:
             Arn: !GetAtt CustomerEventsDLQ.Arn
           RetryPolicy:
             MaximumRetryAttempts: 3
-            MaximumEventAge: 3600
+            MaximumEventAgeInSeconds: 3600
 
   ProductEventsRule:
     Type: AWS::Events::Rule
@@ -417,7 +417,7 @@ Resources:
             Arn: !GetAtt ProductEventsDLQ.Arn
           RetryPolicy:
             MaximumRetryAttempts: 3
-            MaximumEventAge: 3600
+            MaximumEventAgeInSeconds: 3600
 
   CartEventsRule:
     Type: AWS::Events::Rule
@@ -443,7 +443,7 @@ Resources:
             Arn: !GetAtt CartEventsDLQ.Arn
           RetryPolicy:
             MaximumRetryAttempts: 3
-            MaximumEventAge: 3600
+            MaximumEventAgeInSeconds: 3600
 
   OrderProcessorInvokePermission:
     Type: AWS::Lambda::Permission

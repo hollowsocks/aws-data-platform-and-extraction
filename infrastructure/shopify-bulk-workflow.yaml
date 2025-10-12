@@ -15,7 +15,7 @@ Parameters:
   DataLakeBucketName:
     Type: String
     Default: ''
-    Description: 'Target S3 bucket for exported data; defaults to ${Brand}-data-lake-${AccountId}'
+    Description: 'Target S3 bucket for exported data; defaults to the Brand-data-lake-AccountId naming pattern'
 
   ShopifyShopDomain:
     Type: String

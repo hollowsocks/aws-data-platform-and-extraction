@@ -15,7 +15,7 @@ Parameters:
   DataLakeBucketName:
     Type: String
     Default: ''
-    Description: 'S3 bucket for raw Recharge events; defaults to ${Brand}-data-lake-${AccountId}'
+    Description: 'S3 bucket for raw Recharge events; defaults to the Brand-data-lake-AccountId naming pattern'
 
   RechargeProcessorImageUri:
     Type: String
@@ -28,12 +28,12 @@ Parameters:
   SubscriptionTableName:
     Type: String
     Default: ''
-    Description: 'DynamoDB table for subscriptions; defaults to ${Brand}-subscriptions'
+    Description: 'DynamoDB table for subscriptions; defaults to the Brand-subscriptions naming pattern'
 
   ChargesTableName:
     Type: String
     Default: ''
-    Description: 'DynamoDB table for charges; defaults to ${Brand}-subscription-charges'
+    Description: 'DynamoDB table for charges; defaults to the Brand-subscription-charges naming pattern'
 
   AlertTopicArn:
     Type: String
@@ -57,6 +57,11 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Brand}-recharge-event-processor'
       RetentionInDays: 30
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   RechargeProcessorRole:
     Type: AWS::IAM::Role
@@ -113,6 +118,11 @@ Resources:
                       - sns:Publish
                     Resource: !Ref AlertTopicArn
             - !Ref AWS::NoValue
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   RechargeProcessorFunction:
     Type: AWS::Lambda::Function
@@ -145,12 +155,22 @@ Resources:
             - !Ref AlertTopicArn
             - ''
           RECHARGE_WEBHOOK_SECRET: !Sub '{{resolve:secretsmanager:${RechargeWebhookSecretArn}:SecretString:webhook_secret}}'
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   RechargeApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/apigateway/${Brand}-recharge-webhook'
       RetentionInDays: 30
+      Tags:
+        - Key: Brand
+          Value: !Ref Brand
+        - Key: Environment
+          Value: !Ref Environment
 
   RechargeWebhookApi:
     Type: AWS::ApiGatewayV2::Api
@@ -162,6 +182,9 @@ Resources:
           - POST
         AllowOrigins:
           - '*'
+      Tags:
+        Brand: !Ref Brand
+        Environment: !Ref Environment
 
   RechargeWebhookIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -187,6 +210,9 @@ Resources:
       AccessLogSettings:
         DestinationArn: !GetAtt RechargeApiLogGroup.Arn
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","routeKey":"$context.routeKey","status":$context.status,"error":"$context.error.message"}'
+      Tags:
+        Brand: !Ref Brand
+        Environment: !Ref Environment
 
   RechargeInvokePermission:
     Type: AWS::Lambda::Permission

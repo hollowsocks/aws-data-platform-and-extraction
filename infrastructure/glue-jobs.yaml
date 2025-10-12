@@ -28,7 +28,7 @@ Parameters:
   DataLakeBucketName:
     Type: String
     Default: ''
-    Description: 'Override for the data lake bucket; defaults to ${Brand}-data-lake-${AccountId}'
+    Description: 'Override for the data lake bucket; defaults to the Brand-data-lake-AccountId naming pattern'
 
   TempDirPath:
     Type: String
