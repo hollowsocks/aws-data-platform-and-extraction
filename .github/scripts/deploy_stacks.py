@@ -9,6 +9,18 @@ import sys
 from pathlib import Path
 
 
+TERMINAL_FAILURE_STATES = {
+    "ROLLBACK_COMPLETE",
+    "ROLLBACK_FAILED",
+    "UPDATE_ROLLBACK_FAILED",
+    "UPDATE_ROLLBACK_COMPLETE",
+    "IMPORT_ROLLBACK_FAILED",
+    "IMPORT_ROLLBACK_COMPLETE",
+    "CREATE_FAILED",
+    "DELETE_FAILED",
+}
+
+
 def load_parameter_file(path: Path) -> tuple[dict, dict]:
     if not path.exists():
         return {}, {}
@@ -19,9 +31,82 @@ def load_parameter_file(path: Path) -> tuple[dict, dict]:
     return parameters, tags
 
 
-def run_deploy(command: list[str]) -> None:
+def run(command: list[str], *, check: bool = True, capture_output: bool = False) -> subprocess.CompletedProcess:
     print("Running:", " ".join(command))
-    subprocess.run(command, check=True)
+    return subprocess.run(
+        command,
+        check=check,
+        capture_output=capture_output,
+        text=True,
+    )
+
+
+def get_stack_status(stack_name: str, region: str | None) -> str | None:
+    command = [
+        "aws",
+        "cloudformation",
+        "describe-stacks",
+        "--stack-name",
+        stack_name,
+        "--query",
+        "Stacks[0].StackStatus",
+        "--output",
+        "text",
+    ]
+    if region:
+        command.extend(["--region", region])
+
+    result = run(command, check=False, capture_output=True)
+    if result.returncode != 0:
+        message = (result.stderr or "").strip()
+        if "does not exist" in message:
+            return None
+        raise RuntimeError(f"Failed to describe stack {stack_name}: {message}")
+
+    status = (result.stdout or "").strip()
+    if status in {"None", ""}:
+        return None
+    return status
+
+
+def delete_stack(stack_name: str, region: str | None) -> None:
+    command = ["aws", "cloudformation", "delete-stack", "--stack-name", stack_name]
+    if region:
+        command.extend(["--region", region])
+    run(command)
+
+    wait_cmd = [
+        "aws",
+        "cloudformation",
+        "wait",
+        "stack-delete-complete",
+        "--stack-name",
+        stack_name,
+    ]
+    if region:
+        wait_cmd.extend(["--region", region])
+    run(wait_cmd)
+
+
+def ensure_stack_ready(stack_name: str, region: str | None) -> None:
+    status = get_stack_status(stack_name, region)
+    if status is None:
+        return
+
+    if status in TERMINAL_FAILURE_STATES:
+        print(
+            f"Stack {stack_name} is in status {status}; deleting before redeploy to clear the failed state.",
+            file=sys.stderr,
+        )
+        delete_stack(stack_name, region)
+        return
+
+    if status.endswith("_IN_PROGRESS"):
+        raise SystemExit(
+            f"Stack {stack_name} is currently {status}. Wait for the operation to finish before redeploying."
+        )
+
+    # For all other healthy states (CREATE_COMPLETE, UPDATE_COMPLETE, etc.) we let 'deploy' perform an update.
 
 
 def main() -> None:
@@ -41,6 +126,8 @@ def main() -> None:
         template_path = Path(template)
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template}")
+
+        ensure_stack_ready(stack_name, region)
 
         capabilities = stack.get("capabilities", [])
         parameter_path = Path("ci") / "environments" / environment / job / f"{stack['name']}.json"
@@ -70,7 +157,7 @@ def main() -> None:
             tag_args = [f"{key}={value}" for key, value in tags.items()]
             cmd.extend(["--tags", *tag_args])
 
-        run_deploy(cmd)
+        run(cmd)
 
 
 if __name__ == "__main__":
