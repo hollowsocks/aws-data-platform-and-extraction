@@ -143,9 +143,20 @@ Resources:
         source:
           - !Ref PartnerEventSourceName
         detail-type:
-          - orders/create
-          - orders/updated
-          - orders/cancelled
+          - shopifyWebhook
+        detail:
+          metadata:
+            X-Shopify-Topic:
+              - prefix: orders/
+              - prefix: draft_orders/
+              - prefix: refunds/
+              - prefix: returns/
+              - prefix: disputes/
+              - prefix: subscription_contracts/
+              - prefix: subscription_billing_attempts/
+              - prefix: subscription_billing_cycle_edits/
+              - prefix: subscription_billing_cycles/
+              - prefix: bulk_operations/
       State: ENABLED
       Targets:
         - Arn: !GetAtt OrderProcessorFunction.Arn
@@ -366,8 +377,12 @@ Resources:
         source:
           - !Ref PartnerEventSourceName
         detail-type:
-          - fulfillments/create
-          - fulfillments/update
+          - shopifyWebhook
+        detail:
+          metadata:
+            X-Shopify-Topic:
+              - prefix: fulfillments/
+              - prefix: fulfillment_orders/
       State: ENABLED
       Targets:
         - Arn: !GetAtt FulfillmentProcessorFunction.Arn
@@ -383,9 +398,12 @@ Resources:
         source:
           - !Ref PartnerEventSourceName
         detail-type:
-          - customers/create
-          - customers/update
-          - customers/delete
+          - shopifyWebhook
+        detail:
+          metadata:
+            X-Shopify-Topic:
+              - prefix: customers/
+              - prefix: customer_payment_methods/
       State: ENABLED
       Targets:
         - Arn: !GetAtt CustomerProcessorFunction.Arn
@@ -406,9 +424,15 @@ Resources:
         source:
           - !Ref PartnerEventSourceName
         detail-type:
-          - products/create
-          - products/update
-          - products/delete
+          - shopifyWebhook
+        detail:
+          metadata:
+            X-Shopify-Topic:
+              - prefix: products/
+              - prefix: inventory_items/
+              - prefix: inventory_levels/
+              - prefix: locations/
+              - prefix: markets/
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProductProcessorFunction.Arn
@@ -429,12 +453,12 @@ Resources:
         source:
           - !Ref PartnerEventSourceName
         detail-type:
-          - carts/create
-          - carts/update
-          - checkouts/create
-          - checkouts/update
-          - checkouts/delete
-          - checkouts/complete
+          - shopifyWebhook
+        detail:
+          metadata:
+            X-Shopify-Topic:
+              - prefix: carts/
+              - prefix: checkouts/
       State: ENABLED
       Targets:
         - Arn: !GetAtt CartProcessorFunction.Arn

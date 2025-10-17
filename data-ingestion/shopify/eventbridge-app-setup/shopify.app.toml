@@ -1,29 +1,21 @@
-# Shopify App Configuration for EventBridge Data Platform
-# This app configures real-time webhook delivery to AWS EventBridge
-
+# Shopify EventBridge configuration for Marsmen data platform
 name = "Marsmen Data Platform"
 client_id = "4bc5548b8c12fee05ea56760bdfc6f34"
-application_url = "https://c9095d-2.myshopify.com"
+application_url = "https://www.marsmen-data-platform.example"
 embedded = true
 handle = "marsmen-data-platform"
 
 [access_scopes]
-# Required scopes for reading order, customer, product, and fulfillment data
-scopes = "read_orders,read_customers,read_products,read_fulfillments,read_inventory"
+# Read scopes aligned with comprehensive real-time ingestion use cases
+scopes = "read_all_orders,read_analytics,read_app_proxy,read_assigned_fulfillment_orders,read_audit_events,read_customer_events,read_cart_transforms,read_all_cart_transforms,read_validations,read_cash_tracking,read_channels,read_checkout_branding_settings,read_checkouts,read_companies,read_custom_fulfillment_services,read_custom_pixels,read_customers,read_customer_data_erasure,read_customer_merge,read_customer_payment_methods,read_delivery_customizations,read_price_rules,read_discounts,read_discounts_allocator_functions,read_discovery,read_draft_orders,read_files,read_fulfillment_constraint_rules,read_fulfillments,read_gift_card_transactions,read_gift_cards,read_inventory,read_inventory_shipments,read_inventory_shipments_received_items,read_inventory_transfers,read_legal_policies,read_delivery_option_generators,read_locales,read_locations,read_marketing_integrated_campaigns,read_marketing_events,read_markets,read_markets_home,read_merchant_managed_fulfillment_orders,read_metaobject_definitions,read_metaobjects,read_online_store_navigation,read_online_store_pages,read_order_edits,read_orders,read_packing_slip_templates,read_payment_terms,read_payment_customizations,read_pixels,read_privacy_settings,read_product_feeds,read_product_listings,read_products,read_publications,read_purchase_options,read_own_subscription_contracts,read_reports,read_resource_feedbacks,read_returns,read_script_tags,read_shopify_payments_provider_accounts_sensitive,read_shipping,read_shopify_payments_accounts,read_shopify_payments_payouts,read_shopify_payments_bank_accounts,read_shopify_payments_disputes,read_content,read_store_credit_account_transactions,read_store_credit_accounts,read_themes,read_third_party_fulfillment_orders,read_translations,customer_read_companies,customer_read_customers,customer_read_draft_orders,customer_read_markets,customer_read_orders,customer_read_store_credit_account_transactions,customer_read_store_credit_accounts,unauthenticated_read_bulk_operations,unauthenticated_read_bundles,unauthenticated_read_checkouts,unauthenticated_read_customers,unauthenticated_read_customer_tags,unauthenticated_read_metaobjects,unauthenticated_read_product_pickup_locations,unauthenticated_read_product_inventory,unauthenticated_read_product_listings,unauthenticated_read_product_tags,unauthenticated_read_selling_plans,unauthenticated_read_shop_pay_installments_pricing,unauthenticated_read_content"
+
+[auth]
+redirect_urls = []
 
 [webhooks]
-api_version = "2024-10"
+api_version = "2025-10"
 
-  # =============================================================================
-  # AWS EventBridge Webhooks - Data Ingestion Platform
-  # =============================================================================
-  # ARN Format: arn:aws:events:<AWS-REGION>::event-source/aws.partner/shopify.com/286352670721/marsmen-production
-  # AWS Account: 631046354185
-  # AWS Region: us-east-1
-  # Event Source Name: Replace marsmen-production with unique name from Partners dashboard
-  # =============================================================================
-
-  # Orders - Real-time order creation and updates
+  # Orders - creation, updates, and cancellations
   [[webhooks.subscriptions]]
   topics = ["orders/create"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
@@ -40,7 +32,153 @@ api_version = "2024-10"
   topics = ["orders/fulfilled"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
-  # Customers - Customer lifecycle events
+  [[webhooks.subscriptions]]
+  topics = ["orders/paid"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/partially_fulfilled"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/edited"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/risk_assessment_changed"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/shopify_protect_eligibility_changed"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Draft orders lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["draft_orders/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["draft_orders/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["draft_orders/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Refunds and disputes
+  [[webhooks.subscriptions]]
+  topics = ["refunds/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["disputes/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["disputes/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Returns lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["returns/request"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/approve"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/decline"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/cancel"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/close"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["returns/reopen"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Subscriptions lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/activate"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/pause"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/cancel"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/fail"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_contracts/expire"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Subscription billing lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_attempts/success"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_attempts/failure"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_attempts/challenged"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_cycle_edits/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_cycle_edits/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_cycle_edits/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_cycles/skip"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["subscription_billing_cycles/unskip"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Bulk operations completion
+  [[webhooks.subscriptions]]
+  topics = ["bulk_operations/finish"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Customers - lifecycle including deletions
   [[webhooks.subscriptions]]
   topics = ["customers/create"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
@@ -49,7 +187,37 @@ api_version = "2024-10"
   topics = ["customers/update"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
-  # Products - Product and inventory changes
+  [[webhooks.subscriptions]]
+  topics = ["customers/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customers/enable"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customers/disable"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customers/merge"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Customer payment methods and shipping updates
+  [[webhooks.subscriptions]]
+  topics = ["customer_payment_methods/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customer_payment_methods/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["customer_payment_methods/revoke"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+
+  # Products - creation, changes, and deletions
   [[webhooks.subscriptions]]
   topics = ["products/create"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
@@ -58,7 +226,71 @@ api_version = "2024-10"
   topics = ["products/update"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
-  # Fulfillments - Shipping events
+  [[webhooks.subscriptions]]
+  topics = ["products/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Inventory item lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["inventory_items/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["inventory_items/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["inventory_items/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Inventory level changes
+  [[webhooks.subscriptions]]
+  topics = ["inventory_levels/connect"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["inventory_levels/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["inventory_levels/disconnect"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Locations lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["locations/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["locations/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["locations/activate"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["locations/deactivate"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["locations/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Markets lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["markets/create"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["markets/update"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["markets/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Fulfillment lifecycle
   [[webhooks.subscriptions]]
   topics = ["fulfillments/create"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
@@ -67,7 +299,80 @@ api_version = "2024-10"
   topics = ["fulfillments/update"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
-  # Carts & Checkouts - Abandoned cart tracking
+  # Fulfillment order workflow events
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/fulfillment_request_submitted"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/fulfillment_request_accepted"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/fulfillment_request_rejected"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/fulfillment_service_failed_to_complete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/cancellation_request_submitted"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/cancellation_request_accepted"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/cancellation_request_rejected"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/cancelled"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/merged"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/split"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/moved"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/rescheduled"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/order_routing_complete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/placed_on_hold"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/hold_released"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/line_items_prepared_for_local_delivery"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/line_items_prepared_for_pickup"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  [[webhooks.subscriptions]]
+  topics = ["fulfillment_orders/scheduled_fulfillment_order_ready"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
+
+  # Cart and checkout tracking
   [[webhooks.subscriptions]]
   topics = ["carts/create"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
@@ -84,11 +389,11 @@ api_version = "2024-10"
   topics = ["checkouts/update"]
   uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
-  # =============================================================================
-  # Mandatory App Lifecycle Webhooks
-  # =============================================================================
-  # These are handled by the app itself (not EventBridge)
+  [[webhooks.subscriptions]]
+  topics = ["checkouts/delete"]
+  uri = "arn:aws:events:us-east-1::event-source/aws.partner/shopify.com/286352670721/marsmen-production"
 
+  # Mandatory lifecycle hooks handled directly by the app
   [[webhooks.subscriptions]]
   topics = ["app/uninstalled"]
   uri = "/webhooks/app/uninstalled"
