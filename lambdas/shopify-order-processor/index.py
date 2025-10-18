@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import boto3
 
@@ -27,11 +27,8 @@ SUBSCRIPTION_SKUS = [sku.lower() for sku in os.getenv(
 
 def handler(event: Dict[str, Any], _: Any) -> Dict[str, Any]:
     """Process Shopify order events delivered by EventBridge."""
-    logger.info("Processing event %s", event.get("detail-type"))
-
-    order_data = event.get("detail", {})
-    event_type = event.get("detail-type")
-    event_time = event.get("time")
+    order_data, metadata, event_type, event_time = extract_shopify_payload(event)
+    logger.info("Processing event %s", event_type)
 
     if not order_data:
         logger.warning("No order data in event detail")
@@ -39,10 +36,13 @@ def handler(event: Dict[str, Any], _: Any) -> Dict[str, Any]:
 
     order_id = str(order_data.get("id"))
 
-    s3_key = store_raw_event(order_data, event_type, event_time)
+    s3_key = store_raw_event(order_data, metadata, event_type, event_time)
     logger.info("Stored raw order event to s3://%s/%s", S3_BUCKET, s3_key)
 
     enriched_order = enrich_order(order_data, event_type)
+
+    if not enriched_order.get("created_at") and event_time:
+        enriched_order["created_at"] = event_time
 
     if is_recent_order(enriched_order):
         store_in_dynamodb(enriched_order)
@@ -58,7 +58,12 @@ def handler(event: Dict[str, Any], _: Any) -> Dict[str, Any]:
     }
 
 
-def store_raw_event(order_data: Dict[str, Any], event_type: Optional[str], event_time: Optional[str]) -> str:
+def store_raw_event(
+    order_data: Dict[str, Any],
+    metadata: Dict[str, Any],
+    event_type: Optional[str],
+    event_time: Optional[str],
+) -> str:
     """Persist raw event to the immutable S3 bucket."""
     event_dt = datetime.fromisoformat(event_time.replace("Z", "+00:00")) if event_time else datetime.now(timezone.utc)
     order_id = order_data.get("id")
@@ -75,6 +80,7 @@ def store_raw_event(order_data: Dict[str, Any], event_type: Optional[str], event
         "event_time": event_time,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
         "data": order_data,
+        "metadata": metadata,
     }
 
     s3.put_object(
@@ -233,3 +239,17 @@ def store_in_dynamodb(order_data: Dict[str, Any]) -> None:
 
     table.put_item(Item=json.loads(json.dumps(item, default=str), parse_float=Decimal))
 
+
+def extract_shopify_payload(event: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str], Optional[str]]:
+    detail = event.get("detail", {}) or {}
+    if isinstance(detail, dict) and "payload" in detail:
+        payload = detail.get("payload") or {}
+        metadata = detail.get("metadata") or {}
+    else:
+        payload = detail
+        metadata = {}
+
+    topic = metadata.get("X-Shopify-Topic") or event.get("detail-type")
+    event_time = metadata.get("X-Shopify-Triggered-At") or event.get("time")
+
+    return payload, metadata, topic, event_time

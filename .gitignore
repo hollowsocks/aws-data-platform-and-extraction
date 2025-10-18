@@ -1,0 +1,6 @@
+# Python build artefacts
+__pycache__/
+*.py[cod]
+
+# Shopify CLI workspace
+/tools/shopify-cli-workspace/
