@@ -4,16 +4,16 @@ This repository captures the AWS infrastructure and Lambda containers that suppo
 
 ## Deploying the Foundation
 
-1. **Buckets & Tables** – Deploy `infrastructure/data-lake.yaml` and `infrastructure/dynamodb-tables.yaml` to provision the data lake and DynamoDB hot stores (orders, customers, abandoned carts, subscriptions, charges, invoices).
-2. **Glue Catalog** – Deploy `infrastructure/glue-catalog.yaml` to create the databases, crawlers, and IAM role needed for Glue discovery jobs.
-3. **Secrets Manager** – Deploy `infrastructure/secrets-manager.yaml` to create placeholder secrets for Shopify and Recharge. Populate the `access_token` and `webhook_secret` values before wiring any workloads.
+1. **Buckets & Tables** – Deploy `infrastructure/shared/data-lake.yaml` and `infrastructure/shared/dynamodb-tables.yaml` to provision the data lake and DynamoDB hot stores (orders, customers, abandoned carts, subscriptions, charges, invoices).
+2. **Glue Catalog** – Deploy `infrastructure/shared/glue-catalog.yaml` to create the databases, crawlers, and IAM role needed for Glue discovery jobs.
+3. **Secrets Manager** – Deploy `infrastructure/shared/secrets-manager.yaml` to create placeholder secrets for Shopify and Recharge. Populate the `access_token` and `webhook_secret` values before wiring any workloads.
 4. **Lambda Containers** – Use `scripts/build_push_lambdas.sh` (set `PROFILE`, `BRAND`, `REGION` as needed) to create ECR repositories, build each Lambda image, and push the `latest` tag. Record each resulting image URI for CloudFormation parameters.
-5. **Event Routing** – Deploy `infrastructure/eventbridge-rules.yaml`, supplying the Shopify partner event source name plus the ECR image URIs for the order, fulfillment, customer, product, and cart processors. This stack creates the partner event bus, DLQs, IAM roles, and Lambda targets.
-6. **Recharge Ingress** – Deploy `infrastructure/recharge-webhook.yaml` with the Recharge image URI, secret ARN, and (optionally) an SNS alert topic ARN. The stack publishes the Lambda, HTTP API endpoint, and grants Dynamo/S3 access.
-7. **Bulk Workflow** – Deploy `infrastructure/shopify-bulk-workflow.yaml` with the bulk export/poll/download image URIs, Shopify shop domain, and access-token secret ARN. Optionally provide a schedule expression to trigger the Step Functions workflow automatically.
-8. **Glue ETL** – Upload `glue-scripts/orders_enriched_job.py` to an S3 location (for example `s3://[artifact-bucket]/glue/orders_enriched_job.py`) and deploy `infrastructure/glue-jobs.yaml`, supplying the script location, data lake bucket override (if any), worker configuration, and optional schedule.
-9. **Monitoring & Alerts** – Deploy `infrastructure/monitoring.yaml` to stand up the shared SNS alerts topic, CloudWatch alarms for every Lambda/DLQ, and dashboards summarizing platform health.
-10. **Data Quality Checks** – Deploy `infrastructure/data-quality.yaml` with the data quality container image URI, schedule expression, and (optionally) the alerts topic ARN from the monitoring stack to enable automated health checks.
+5. **Event Routing** – Deploy `infrastructure/shopify/eventbridge-rules.yaml`, supplying the Shopify partner event source name plus the ECR image URIs for the order, fulfillment, customer, product, and cart processors. This stack creates the partner event bus, DLQs, IAM roles, and Lambda targets.
+6. **Recharge Ingress** – Deploy `infrastructure/recharge/recharge-webhook.yaml` with the Recharge image URI, secret ARN, and (optionally) an SNS alert topic ARN. The stack publishes the Lambda, HTTP API endpoint, and grants Dynamo/S3 access.
+7. **Bulk Workflow** – Deploy `infrastructure/shopify/shopify-bulk-workflow.yaml` with the bulk export/poll/download image URIs, Shopify shop domain, and access-token secret ARN. Optionally provide a schedule expression to trigger the Step Functions workflow automatically.
+8. **Glue ETL** – Upload `glue-scripts/orders_enriched_job.py` to an S3 location (for example `s3://[artifact-bucket]/glue/orders_enriched_job.py`) and deploy `infrastructure/shopify/glue-jobs.yaml`, supplying the script location, data lake bucket override (if any), worker configuration, and optional schedule.
+9. **Monitoring & Alerts** – Deploy `infrastructure/monitoring/monitoring.yaml` to stand up the shared SNS alerts topic, CloudWatch alarms for every Lambda/DLQ, and dashboards summarizing platform health.
+10. **Data Quality Checks** – Deploy `infrastructure/data-quality/data-quality.yaml` with the data quality container image URI, schedule expression, and (optionally) the alerts topic ARN from the monitoring stack to enable automated health checks.
 
 ## Shopify & Partner Configuration Checklist
 
@@ -40,4 +40,5 @@ This repository captures the AWS infrastructure and Lambda containers that suppo
 - Configure GitHub Actions secrets and populate `ci/environments/prod/<job>/` parameter files so the new build/deploy workflows can push images and update stacks in production. (Done for `shopify` but review before the first deploy if resource names change.)
 - Implement the Step Functions schedule once export cadence is finalized (set `BulkWorkflowScheduleExpression` as a cron or rate expression).
 - Build and push dedicated fulfillment Lambda image(s) for EventBridge once the processor implementation lands; `FulfillmentProcessorImageUri` is temporarily pointed at the order processor image.
-- Extend `infrastructure/recharge-webhook.yaml` or author a companion template if additional Recharge or Shopify integrations are required.
+- Extend `infrastructure/recharge/recharge-webhook.yaml` or author a companion template if additional Recharge or Shopify integrations are required.
+- **TripleWhale ingestion (in progress)** – scaffolding now lives under `data-ingestion/triplewhale/`, `infrastructure/triplewhale/`, `lambdas/triplewhale/`, and `docs/triplewhale/`. Complete the migration by porting the Lambda + Step Functions resources from `growth-reporting-engine` and wiring the new GitHub Actions workflow (`deploy-triplewhale.yml`).

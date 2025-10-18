@@ -280,7 +280,7 @@ If you use Recharge for subscriptions, webhooks capture subscription lifecycle e
 ### Instructions
 
 1. **Deploy Recharge Infrastructure First**
-   - Deploy `infrastructure/recharge-webhook.yaml` (see deployment guide)
+   - Deploy `infrastructure/recharge/recharge-webhook.yaml` (see deployment guide)
    - Note the **API Gateway invoke URL** from stack outputs
 
 2. **Create Recharge Webhook Secret**
@@ -384,7 +384,7 @@ Receive notifications when data quality issues or ingestion failures occur.
 ### Instructions
 
 1. **Find SNS Topic ARN**
-   - After deploying `infrastructure/monitoring.yaml`
+   - After deploying `infrastructure/monitoring/monitoring.yaml`
    - Look for output: `AlertsTopicArn`
    - Format: `arn:aws:sns:us-east-1:631046354185:marsmen-data-platform-alerts`
 

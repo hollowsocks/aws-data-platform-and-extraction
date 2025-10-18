@@ -20,32 +20,32 @@
       "stacks": [
         {
           "name": "eventbridge",
-          "template": "infrastructure/eventbridge-rules.yaml",
+          "template": "infrastructure/shopify/eventbridge-rules.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         },
         {
           "name": "recharge",
-          "template": "infrastructure/recharge-webhook.yaml",
+          "template": "infrastructure/recharge/recharge-webhook.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         },
         {
           "name": "bulk-workflow",
-          "template": "infrastructure/shopify-bulk-workflow.yaml",
+          "template": "infrastructure/shopify/shopify-bulk-workflow.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         },
         {
           "name": "monitoring",
-          "template": "infrastructure/monitoring.yaml",
+          "template": "infrastructure/monitoring/monitoring.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         },
         {
           "name": "data-quality",
-          "template": "infrastructure/data-quality.yaml",
+          "template": "infrastructure/data-quality/data-quality.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         },
         {
           "name": "glue-jobs",
-          "template": "infrastructure/glue-jobs.yaml",
+          "template": "infrastructure/shopify/glue-jobs.yaml",
           "capabilities": ["CAPABILITY_NAMED_IAM"]
         }
       ]

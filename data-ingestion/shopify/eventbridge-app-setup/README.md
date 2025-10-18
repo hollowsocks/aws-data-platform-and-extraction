@@ -235,7 +235,7 @@ npm install -g @shopify/cli @shopify/app
 
 After successfully deploying webhooks:
 
-1. **Deploy EventBridge Rules** - Deploy `infrastructure/eventbridge-rules.yaml` to route events to Lambda processors
+1. **Deploy EventBridge Rules** - Deploy `infrastructure/shopify/eventbridge-rules.yaml` to route events to Lambda processors
 2. **Test Event Flow** - Place a test order and verify events reach Lambda
 3. **Monitor CloudWatch** - Check Lambda logs for event processing
 4. **Verify S3 Storage** - Confirm raw events are stored in S3

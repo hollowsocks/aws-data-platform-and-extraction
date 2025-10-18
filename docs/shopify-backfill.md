@@ -5,7 +5,7 @@ This guide explains how to backfill historical Shopify order data using the bulk
 ---
 ## Prerequisites
 
-- `infrastructure/shopify-bulk-workflow.yaml`
+- `infrastructure/shopify/shopify-bulk-workflow.yaml`
 - Container images in ECR:
   - `marsmen-shopify-bulk-export`
   - `marsmen-shopify-bulk-poll`
@@ -27,7 +27,7 @@ If you prefer to deploy manually:
 ```bash
 aws cloudformation deploy \
   --stack-name marsmen-shopify-bulk-workflow \
-  --template-file infrastructure/shopify-bulk-workflow.yaml \
+  --template-file infrastructure/shopify/shopify-bulk-workflow.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1 \
   --parameter-overrides \

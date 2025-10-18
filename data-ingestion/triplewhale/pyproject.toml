@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triplewhale-ingestion"
+version = "0.0.1"
+description = "Shared TripleWhale ingestion utilities"
+authors = [{name = "Mars Men Data Platform"}]
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

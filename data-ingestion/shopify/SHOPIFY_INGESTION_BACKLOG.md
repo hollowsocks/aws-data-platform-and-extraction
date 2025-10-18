@@ -13,12 +13,12 @@ _Comprehensive backlog derived from the greenfield best-practices guide. Use thi
 
 ## Remaining Work Snapshot
 
-- **EventBridge deployment:** Supply partner source name plus the five Lambda image URIs, deploy `infrastructure/eventbridge-rules.yaml`, and validate DLQs/permissions in staging.
+- **EventBridge deployment:** Supply partner source name plus the five Lambda image URIs, deploy `infrastructure/shopify/eventbridge-rules.yaml`, and validate DLQs/permissions in staging.
 - **Secrets & config:** Populate Secrets Manager entries (`ShopifyAdminApiSecret`, `RechargeWebhookSecret`), grant IAM access, and update Lambda environment variables to resolve the secrets at runtime.
-- **Bulk & Recharge orchestration:** Deploy `infrastructure/shopify-bulk-workflow.yaml` and `infrastructure/recharge-webhook.yaml`, then hook the Recharge portal to the new invoke URL and confirm Step Functions execution.
-- **Monitoring rollout:** Launch `infrastructure/monitoring.yaml`, subscribe the operations email to `${Brand}-data-platform-alerts`, and backfill dashboards with initial metrics.
-- **Glue ETL job:** Upload `glue-scripts/orders_enriched_job.py` to the artifact bucket, deploy `infrastructure/glue-jobs.yaml`, and validate the on-demand run (or schedule) writes to `processed/shopify/orders_enriched/`.
-- **Data quality checks:** Build/push the data-quality container image, deploy `infrastructure/data-quality.yaml`, and confirm scheduled executions publish metrics and alerts.
+- **Bulk & Recharge orchestration:** Deploy `infrastructure/shopify/shopify-bulk-workflow.yaml` and `infrastructure/recharge/recharge-webhook.yaml`, then hook the Recharge portal to the new invoke URL and confirm Step Functions execution.
+- **Monitoring rollout:** Launch `infrastructure/monitoring/monitoring.yaml`, subscribe the operations email to `${Brand}-data-platform-alerts`, and backfill dashboards with initial metrics.
+- **Glue ETL job:** Upload `glue-scripts/orders_enriched_job.py` to the artifact bucket, deploy `infrastructure/shopify/glue-jobs.yaml`, and validate the on-demand run (or schedule) writes to `processed/shopify/orders_enriched/`.
+- **Data quality checks:** Build/push the data-quality container image, deploy `infrastructure/data-quality/data-quality.yaml`, and confirm scheduled executions publish metrics and alerts.
 - **CI/CD enablement:** Configure GitHub Action secrets, keep `ci/environments/prod/<job>/` parameter files up to date, and extend `ci/ingestion_jobs.json` as additional ingestion jobs are onboarded.
 - **Shopify partner actions:** Create/activate EventBridge webhooks, accept the partner source in AWS, and confirm event delivery through to the order/customer/cart processors.
 

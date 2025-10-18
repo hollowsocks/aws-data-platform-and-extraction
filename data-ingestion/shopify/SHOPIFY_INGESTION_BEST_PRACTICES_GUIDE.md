@@ -3130,7 +3130,7 @@ echo "✅ DynamoDB table configured"
 echo ""
 echo "📡 Deploying EventBridge infrastructure..."
 aws cloudformation deploy \
-  --template-file infrastructure/eventbridge-rules.yaml \
+  --template-file infrastructure/shopify/eventbridge-rules.yaml \
   --stack-name "${BRAND}-shopify-eventbridge" \
   --parameter-overrides \
     Brand=$BRAND \
@@ -3182,7 +3182,7 @@ done
 echo ""
 echo "🗂️  Deploying Glue Data Catalog..."
 aws cloudformation deploy \
-  --template-file infrastructure/glue-catalog.yaml \
+  --template-file infrastructure/shared/glue-catalog.yaml \
   --stack-name "${BRAND}-shopify-glue" \
   --parameter-overrides \
     Brand=$BRAND \
@@ -3520,11 +3520,11 @@ if __name__ == '__main__':
 
 1. Populate Secrets Manager values for Shopify and Recharge, then create Shopify EventBridge webhooks and accept the partner event source in AWS once the shop is ready.
 2. Run `scripts/build_push_lambdas.sh` to build/push all Lambda containers, capturing the resulting ECR image URIs for stack parameters.
-3. Deploy `infrastructure/eventbridge-rules.yaml` with the partner source name and image URIs, then publish test orders/customers to confirm events reach the processors and DLQs stay empty.
-4. Deploy `infrastructure/recharge-webhook.yaml`, update the Recharge portal to point at the new invoke URL, and validate signature handling plus DynamoDB writes.
-5. Upload the Glue script to S3 and deploy `infrastructure/glue-jobs.yaml`, then execute the job to populate `processed/shopify/orders_enriched/` and (optionally) enable the scheduled trigger.
-6. Deploy `infrastructure/shopify-bulk-workflow.yaml`, run a manual execution to confirm export → poll → download succeeds, and set a schedule once cadence is agreed.
-7. Deploy `infrastructure/data-quality.yaml` with the alerts topic ARN so hourly quality checks publish metrics and SNS notifications.
-8. Launch `infrastructure/monitoring.yaml` and configure the GitHub Actions workflows (secrets, production parameter files, job definitions) so image builds and stack deployments can run on demand.
+3. Deploy `infrastructure/shopify/eventbridge-rules.yaml` with the partner source name and image URIs, then publish test orders/customers to confirm events reach the processors and DLQs stay empty.
+4. Deploy `infrastructure/recharge/recharge-webhook.yaml`, update the Recharge portal to point at the new invoke URL, and validate signature handling plus DynamoDB writes.
+5. Upload the Glue script to S3 and deploy `infrastructure/shopify/glue-jobs.yaml`, then execute the job to populate `processed/shopify/orders_enriched/` and (optionally) enable the scheduled trigger.
+6. Deploy `infrastructure/shopify/shopify-bulk-workflow.yaml`, run a manual execution to confirm export → poll → download succeeds, and set a schedule once cadence is agreed.
+7. Deploy `infrastructure/data-quality/data-quality.yaml` with the alerts topic ARN so hourly quality checks publish metrics and SNS notifications.
+8. Launch `infrastructure/monitoring/monitoring.yaml` and configure the GitHub Actions workflows (secrets, production parameter files, job definitions) so image builds and stack deployments can run on demand.
 
 This architecture follows AWS best practices and provides a scalable, cost-effective foundation for Shopify data ingestion. Let me know if you need clarification on any component!

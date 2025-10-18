@@ -1,0 +1,123 @@
+name: Deploy TripleWhale Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'data-ingestion/triplewhale/**'
+      - 'glue-scripts/triplewhale/**'
+      - 'infrastructure/triplewhale/**'
+      - 'lambdas/triplewhale/**'
+      - '.github/workflows/deploy-triplewhale.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.TRIPLEWHALE_AWS_REGION || 'us-east-1' }}
+  STACK_NAME: ${{ vars.TRIPLEWHALE_STACK_NAME || 'triplewhale-ingestion' }}
+  DATA_LAKE_BUCKET: ${{ vars.TRIPLEWHALE_DATA_LAKE_BUCKET }}
+  OUTPUT_PREFIX: ${{ vars.TRIPLEWHALE_OUTPUT_PREFIX || 'hourly' }}
+  ATHENA_RESULTS_BUCKET: ${{ vars.TRIPLEWHALE_ATHENA_RESULTS_BUCKET }}
+  ATHENA_DATABASE_NAME: ${{ vars.TRIPLEWHALE_ATHENA_DATABASE_NAME || 'growth_reporting' }}
+  ATHENA_TABLE_NAME: ${{ vars.TRIPLEWHALE_ATHENA_TABLE_NAME || 'growth_report_hourly' }}
+  GLUE_CRAWLER_NAME: ${{ vars.TRIPLEWHALE_GLUE_CRAWLER_NAME || 'triplewhale-hourly-crawler' }}
+  EVENT_SCHEDULE_EXPRESSION: ${{ vars.TRIPLEWHALE_EVENT_SCHEDULE || 'cron(15 * * * ? *)' }}
+  API_GATEWAY_HTTP_API_ID: ${{ vars.TRIPLEWHALE_HTTP_API_ID || '' }}
+  API_GATEWAY_AUTHORIZER_ID: ${{ vars.TRIPLEWHALE_AUTHORIZER_ID || '' }}
+  LAMBDA_ARTIFACT_BUCKET: ${{ vars.TRIPLEWHALE_LAMBDA_BUCKET }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required environment variables
+        run: |
+          set -euo pipefail
+          missing=()
+          for var in DATA_LAKE_BUCKET ATHENA_RESULTS_BUCKET LAMBDA_ARTIFACT_BUCKET; do
+            value=$(printenv "$var" || true)
+            if [ -z "$value" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required environment variables: ${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: triplewhale-deploy
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Package TripleWhale Lambda artifact
+        run: |
+          set -euo pipefail
+          rm -rf build/triplewhale-lambda
+          mkdir -p build/triplewhale-lambda
+          python -m pip install --upgrade pip
+          pip install \
+            --target build/triplewhale-lambda \
+            --no-cache-dir \
+            --only-binary=:all: \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.11 \
+            --abi cp311 \
+            -r lambdas/triplewhale/requirements.txt
+          cp -R data-ingestion/triplewhale/src/triplewhale_ingestion build/triplewhale-lambda/triplewhale_ingestion
+          cp lambdas/triplewhale/ingestion/*.py build/triplewhale-lambda/
+          find build/triplewhale-lambda -type d -name '__pycache__' -prune -exec rm -rf {} +
+          (cd build/triplewhale-lambda && zip -r ../triplewhale-lambda.zip .)
+
+      - name: Upload Lambda package to S3
+        run: |
+          set -euo pipefail
+          export LAMBDA_ARTIFACT_KEY=lambda/triplewhale-lambda-${{ github.sha }}.zip
+          aws s3 cp build/triplewhale-lambda.zip s3://${LAMBDA_ARTIFACT_BUCKET}/$LAMBDA_ARTIFACT_KEY
+          echo "LAMBDA_ARTIFACT_KEY=$LAMBDA_ARTIFACT_KEY" >> $GITHUB_ENV
+
+      - name: Delete failed stack if necessary
+        run: |
+          set -euo pipefail
+          STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || true)
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            aws cloudformation delete-stack --stack-name $STACK_NAME
+            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
+          fi
+
+      - name: Deploy TripleWhale CloudFormation stack
+        env:
+          TRIPLE_WHALE_SECRET_ARN: ${{ secrets.TRIPLE_WHALE_SECRET_ARN || '' }}
+        run: |
+          set -euo pipefail
+          aws cloudformation deploy \
+            --template-file infrastructure/triplewhale/triplewhale.yaml \
+            --stack-name $STACK_NAME \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              DataLakeBucket=${DATA_LAKE_BUCKET} \
+              OutputPrefix=${OUTPUT_PREFIX} \
+              LambdaArtifactBucket=${LAMBDA_ARTIFACT_BUCKET} \
+              LambdaArtifactKey=$LAMBDA_ARTIFACT_KEY \
+              TripleWhaleSecretArn=${TRIPLE_WHALE_SECRET_ARN} \
+              AthenaResultBucket=${ATHENA_RESULTS_BUCKET} \
+              AthenaDatabaseName=${ATHENA_DATABASE_NAME} \
+              AthenaTableName=${ATHENA_TABLE_NAME} \
+              GlueCrawlerName=${GLUE_CRAWLER_NAME} \
+              EventScheduleExpression='${EVENT_SCHEDULE_EXPRESSION}' \
+              ApiGatewayHttpApiId='${API_GATEWAY_HTTP_API_ID}' \
+              ApiGatewayAuthorizerId='${API_GATEWAY_AUTHORIZER_ID}'
