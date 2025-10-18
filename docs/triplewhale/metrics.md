@@ -42,6 +42,27 @@
 | `onsite_purchases` | ads_table | On-site purchases captured by TripleWhale |
 | `onsite_conversion_value` | ads_table | Revenue attributed to on-site purchases |
 | `onsite_roas` | derived | `onsite_conversion_value / total_spend` |
+| `search_impression_share` | ads_table | Weighted average search impression share (0-1) |
+| `search_top_impression_share` | ads_table | Weighted average top-of-page impression share (0-1) |
+| `search_absolute_top_impression_share` | ads_table | Weighted average absolute-top impression share (0-1) |
+| `search_budget_lost_top_impression_share` | ads_table | Share of impressions lost to budget at top position |
+| `search_budget_lost_absolute_top_impression_share` | ads_table | Share of impressions lost to budget at absolute top |
+| `search_rank_lost_top_impression_share` | ads_table | Share of impressions lost to rank at top position |
+| `search_rank_lost_impression_share` | ads_table | Share of impressions lost to rank overall |
+| `search_top_impressions` | ads_table | Count of impressions shown in top slots |
+| `search_absolute_top_impressions` | ads_table | Count of impressions shown in absolute top slot |
+| `search_budget_lost_top_impressions` | ads_table | Impressions missed due to budget limits (top position) |
+| `search_budget_lost_absolute_top_impressions` | ads_table | Impressions missed due to budget limits (absolute top) |
+| `search_rank_lost_top_impressions` | ads_table | Impressions missed due to low rank (top position) |
+| `search_rank_lost_impressions` | ads_table | Impressions missed due to low rank overall |
+| `campaign_ai_recommendation` | ads_table | TripleWhale AI recommendation payload at campaign level (JSON string) |
+| `campaign_ai_roas_pacing` | ads_table | AI pacing diagnostics for campaign ROAS (JSON string) |
+| `adset_ai_recommendation` | ads_table | TripleWhale AI recommendation payload at ad set level (JSON string) |
+| `adset_ai_roas_pacing` | ads_table | AI pacing diagnostics for ad set ROAS (JSON string) |
+| `ad_ai_recommendation` | ads_table | TripleWhale AI recommendation payload at ad level (JSON string) |
+| `ad_ai_roas_pacing` | ads_table | AI pacing diagnostics for ad ROAS (JSON string) |
+| `channel_ai_recommendation` | ads_table | Channel-level AI recommendation payload (JSON string) |
+| `channel_ai_roas_pacing` | ads_table | Channel-level AI pacing diagnostics (JSON string) |
 | `local_datetime` | derived | Hour timestamp in the region's local timezone |
 | `local_date` | derived | Local calendar date |
 | `local_hour` | derived | String hour bucket in local time (YYYY-MM-DD HH:00) |

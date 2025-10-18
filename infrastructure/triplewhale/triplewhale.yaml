@@ -317,6 +317,48 @@ Resources:
               Type: double
             - Name: onsite_roas
               Type: double
+            - Name: search_impression_share
+              Type: double
+            - Name: search_top_impression_share
+              Type: double
+            - Name: search_absolute_top_impression_share
+              Type: double
+            - Name: search_budget_lost_top_impression_share
+              Type: double
+            - Name: search_budget_lost_absolute_top_impression_share
+              Type: double
+            - Name: search_rank_lost_top_impression_share
+              Type: double
+            - Name: search_rank_lost_impression_share
+              Type: double
+            - Name: search_top_impressions
+              Type: double
+            - Name: search_absolute_top_impressions
+              Type: double
+            - Name: search_budget_lost_top_impressions
+              Type: double
+            - Name: search_budget_lost_absolute_top_impressions
+              Type: double
+            - Name: search_rank_lost_top_impressions
+              Type: double
+            - Name: search_rank_lost_impressions
+              Type: double
+            - Name: campaign_ai_recommendation
+              Type: string
+            - Name: campaign_ai_roas_pacing
+              Type: string
+            - Name: adset_ai_recommendation
+              Type: string
+            - Name: adset_ai_roas_pacing
+              Type: string
+            - Name: ad_ai_recommendation
+              Type: string
+            - Name: ad_ai_roas_pacing
+              Type: string
+            - Name: channel_ai_recommendation
+              Type: string
+            - Name: channel_ai_roas_pacing
+              Type: string
           Location: !Sub s3://${OutputBucketName}/hourly/
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat

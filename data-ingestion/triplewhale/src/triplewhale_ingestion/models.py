@@ -33,6 +33,27 @@ class HourlyRegionMetrics:
     onsite_purchases: float = 0.0
     onsite_conversion_value: float = 0.0
     meta_purchases: float = 0.0
+    search_impression_share: float = 0.0
+    search_top_impression_share: float = 0.0
+    search_absolute_top_impression_share: float = 0.0
+    search_budget_lost_top_impression_share: float = 0.0
+    search_budget_lost_absolute_top_impression_share: float = 0.0
+    search_rank_lost_top_impression_share: float = 0.0
+    search_rank_lost_impression_share: float = 0.0
+    search_top_impressions: float = 0.0
+    search_absolute_top_impressions: float = 0.0
+    search_budget_lost_top_impressions: float = 0.0
+    search_budget_lost_absolute_top_impressions: float = 0.0
+    search_rank_lost_top_impressions: float = 0.0
+    search_rank_lost_impressions: float = 0.0
+    campaign_ai_recommendation: str = ""
+    campaign_ai_roas_pacing: str = ""
+    adset_ai_recommendation: str = ""
+    adset_ai_roas_pacing: str = ""
+    ad_ai_recommendation: str = ""
+    ad_ai_roas_pacing: str = ""
+    channel_ai_recommendation: str = ""
+    channel_ai_roas_pacing: str = ""
 
     @property
     def total_spend(self) -> float:
@@ -82,6 +103,27 @@ class DailyRegionReport:
     onsite_purchases: Optional[float] = None
     onsite_conversion_value: Optional[float] = None
     onsite_roas: Optional[float] = None
+    search_impression_share: Optional[float] = None
+    search_top_impression_share: Optional[float] = None
+    search_absolute_top_impression_share: Optional[float] = None
+    search_budget_lost_top_impression_share: Optional[float] = None
+    search_budget_lost_absolute_top_impression_share: Optional[float] = None
+    search_rank_lost_top_impression_share: Optional[float] = None
+    search_rank_lost_impression_share: Optional[float] = None
+    search_top_impressions: Optional[float] = None
+    search_absolute_top_impressions: Optional[float] = None
+    search_budget_lost_top_impressions: Optional[float] = None
+    search_budget_lost_absolute_top_impressions: Optional[float] = None
+    search_rank_lost_top_impressions: Optional[float] = None
+    search_rank_lost_impressions: Optional[float] = None
+    campaign_ai_recommendation: Optional[str] = None
+    campaign_ai_roas_pacing: Optional[str] = None
+    adset_ai_recommendation: Optional[str] = None
+    adset_ai_roas_pacing: Optional[str] = None
+    ad_ai_recommendation: Optional[str] = None
+    ad_ai_roas_pacing: Optional[str] = None
+    channel_ai_recommendation: Optional[str] = None
+    channel_ai_roas_pacing: Optional[str] = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -119,6 +161,27 @@ class DailyRegionReport:
             "onsite_purchases": round(self.onsite_purchases, 2) if self.onsite_purchases is not None else None,
             "onsite_conversion_value": round(self.onsite_conversion_value, 2) if self.onsite_conversion_value is not None else None,
             "onsite_roas": round(self.onsite_roas, 3) if self.onsite_roas is not None else None,
+            "search_impression_share": round(self.search_impression_share, 4) if self.search_impression_share is not None else None,
+            "search_top_impression_share": round(self.search_top_impression_share, 4) if self.search_top_impression_share is not None else None,
+            "search_absolute_top_impression_share": round(self.search_absolute_top_impression_share, 4) if self.search_absolute_top_impression_share is not None else None,
+            "search_budget_lost_top_impression_share": round(self.search_budget_lost_top_impression_share, 4) if self.search_budget_lost_top_impression_share is not None else None,
+            "search_budget_lost_absolute_top_impression_share": round(self.search_budget_lost_absolute_top_impression_share, 4) if self.search_budget_lost_absolute_top_impression_share is not None else None,
+            "search_rank_lost_top_impression_share": round(self.search_rank_lost_top_impression_share, 4) if self.search_rank_lost_top_impression_share is not None else None,
+            "search_rank_lost_impression_share": round(self.search_rank_lost_impression_share, 4) if self.search_rank_lost_impression_share is not None else None,
+            "search_top_impressions": round(self.search_top_impressions, 2) if self.search_top_impressions is not None else None,
+            "search_absolute_top_impressions": round(self.search_absolute_top_impressions, 2) if self.search_absolute_top_impressions is not None else None,
+            "search_budget_lost_top_impressions": round(self.search_budget_lost_top_impressions, 2) if self.search_budget_lost_top_impressions is not None else None,
+            "search_budget_lost_absolute_top_impressions": round(self.search_budget_lost_absolute_top_impressions, 2) if self.search_budget_lost_absolute_top_impressions is not None else None,
+            "search_rank_lost_top_impressions": round(self.search_rank_lost_top_impressions, 2) if self.search_rank_lost_top_impressions is not None else None,
+            "search_rank_lost_impressions": round(self.search_rank_lost_impressions, 2) if self.search_rank_lost_impressions is not None else None,
+            "campaign_ai_recommendation": self.campaign_ai_recommendation,
+            "campaign_ai_roas_pacing": self.campaign_ai_roas_pacing,
+            "adset_ai_recommendation": self.adset_ai_recommendation,
+            "adset_ai_roas_pacing": self.adset_ai_roas_pacing,
+            "ad_ai_recommendation": self.ad_ai_recommendation,
+            "ad_ai_roas_pacing": self.ad_ai_roas_pacing,
+            "channel_ai_recommendation": self.channel_ai_recommendation,
+            "channel_ai_roas_pacing": self.channel_ai_roas_pacing,
             "new_customer_aov": round(self.new_customer_aov, 2) if self.new_customer_aov is not None else None,
             "new_customer_roas": round(self.new_customer_roas, 3) if self.new_customer_roas is not None else None,
             "blended_roas": round(self.blended_roas, 3) if self.blended_roas is not None else None,

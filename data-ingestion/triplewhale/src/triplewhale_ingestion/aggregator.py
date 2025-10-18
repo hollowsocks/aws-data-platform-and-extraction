@@ -10,6 +10,28 @@ from .models import DailyRegionReport, HourlyRegionMetrics
 from .timezones import to_local_date, to_local_datetime
 
 
+SEARCH_SHARE_FIELDS = [
+    "search_impression_share",
+    "search_top_impression_share",
+    "search_absolute_top_impression_share",
+    "search_budget_lost_top_impression_share",
+    "search_budget_lost_absolute_top_impression_share",
+    "search_rank_lost_top_impression_share",
+    "search_rank_lost_impression_share",
+]
+
+AI_PACING_FIELDS = [
+    "campaign_ai_recommendation",
+    "campaign_ai_roas_pacing",
+    "adset_ai_recommendation",
+    "adset_ai_roas_pacing",
+    "ad_ai_recommendation",
+    "ad_ai_roas_pacing",
+    "channel_ai_recommendation",
+    "channel_ai_roas_pacing",
+]
+
+
 DAILY_REPORT_COLUMNS = [
     "region",
     "local_date",
@@ -47,6 +69,27 @@ DAILY_REPORT_COLUMNS = [
     "onsite_purchases",
     "onsite_conversion_value",
     "onsite_roas",
+    "search_impression_share",
+    "search_top_impression_share",
+    "search_absolute_top_impression_share",
+    "search_budget_lost_top_impression_share",
+    "search_budget_lost_absolute_top_impression_share",
+    "search_rank_lost_top_impression_share",
+    "search_rank_lost_impression_share",
+    "search_top_impressions",
+    "search_absolute_top_impressions",
+    "search_budget_lost_top_impressions",
+    "search_budget_lost_absolute_top_impressions",
+    "search_rank_lost_top_impressions",
+    "search_rank_lost_impressions",
+    "campaign_ai_recommendation",
+    "campaign_ai_roas_pacing",
+    "adset_ai_recommendation",
+    "adset_ai_roas_pacing",
+    "ad_ai_recommendation",
+    "ad_ai_roas_pacing",
+    "channel_ai_recommendation",
+    "channel_ai_roas_pacing",
     "new_customer_aov",
     "new_customer_roas",
     "blended_roas",
@@ -83,6 +126,27 @@ def _records_to_dataframe(records: Iterable[HourlyRegionMetrics]) -> pd.DataFram
                 "onsite_purchases": record.onsite_purchases,
                 "onsite_conversion_value": record.onsite_conversion_value,
                 "meta_purchases": record.meta_purchases,
+                "search_impression_share": record.search_impression_share,
+                "search_top_impression_share": record.search_top_impression_share,
+                "search_absolute_top_impression_share": record.search_absolute_top_impression_share,
+                "search_budget_lost_top_impression_share": record.search_budget_lost_top_impression_share,
+                "search_budget_lost_absolute_top_impression_share": record.search_budget_lost_absolute_top_impression_share,
+                "search_rank_lost_top_impression_share": record.search_rank_lost_top_impression_share,
+                "search_rank_lost_impression_share": record.search_rank_lost_impression_share,
+                "search_top_impressions": record.search_top_impressions,
+                "search_absolute_top_impressions": record.search_absolute_top_impressions,
+                "search_budget_lost_top_impressions": record.search_budget_lost_top_impressions,
+                "search_budget_lost_absolute_top_impressions": record.search_budget_lost_absolute_top_impressions,
+                "search_rank_lost_top_impressions": record.search_rank_lost_top_impressions,
+                "search_rank_lost_impressions": record.search_rank_lost_impressions,
+                "campaign_ai_recommendation": record.campaign_ai_recommendation,
+                "campaign_ai_roas_pacing": record.campaign_ai_roas_pacing,
+                "adset_ai_recommendation": record.adset_ai_recommendation,
+                "adset_ai_roas_pacing": record.adset_ai_roas_pacing,
+                "ad_ai_recommendation": record.ad_ai_recommendation,
+                "ad_ai_roas_pacing": record.ad_ai_roas_pacing,
+                "channel_ai_recommendation": record.channel_ai_recommendation,
+                "channel_ai_roas_pacing": record.channel_ai_roas_pacing,
             }
         )
     return pd.DataFrame(rows)
@@ -99,33 +163,52 @@ def build_daily_report(records: Sequence[HourlyRegionMetrics]) -> pd.DataFrame:
         lambda row: to_local_date(row["timestamp_utc"], row["region"]), axis=1
     )
 
-    grouped = (
-        df.groupby(["region", "local_date"], as_index=False)
-        .agg(
-            meta_spend=("meta_spend", "sum"),
-            google_spend=("google_spend", "sum"),
-            new_customer_orders=("new_customer_orders", "sum"),
-            new_customer_sales=("new_customer_sales", "sum"),
-            total_sales=("total_sales", "sum"),
-            total_orders=("total_orders", "sum"),
-            gross_sales=("gross_sales", "sum"),
-            gross_product_sales=("gross_product_sales", "sum"),
-            refund_money=("refund_money", "sum"),
-            discount_amount=("discount_amount", "sum"),
-            cost_of_goods=("cost_of_goods", "sum"),
-            shipping_costs=("shipping_costs", "sum"),
-            estimated_shipping_costs=("estimated_shipping_costs", "sum"),
-            handling_fees=("handling_fees", "sum"),
-            payment_gateway_costs=("payment_gateway_costs", "sum"),
-            non_tracked_spend=("non_tracked_spend", "sum"),
-            impressions=("impressions", "sum"),
-            clicks=("clicks", "sum"),
-            onsite_purchases=("onsite_purchases", "sum"),
-            onsite_conversion_value=("onsite_conversion_value", "sum"),
-            meta_purchases=("meta_purchases", "sum"),
-            currency=("currency", "first"),
-        )
-    )
+    impressions_weight = df["impressions"].fillna(0.0)
+    for field in SEARCH_SHARE_FIELDS:
+        df[field] = df[field].fillna(0.0)
+        df[f"{field}_weighted"] = df[field] * impressions_weight
+
+    aggregations: dict[str, tuple[str, str]] = {
+        "meta_spend": ("meta_spend", "sum"),
+        "google_spend": ("google_spend", "sum"),
+        "new_customer_orders": ("new_customer_orders", "sum"),
+        "new_customer_sales": ("new_customer_sales", "sum"),
+        "total_sales": ("total_sales", "sum"),
+        "total_orders": ("total_orders", "sum"),
+        "gross_sales": ("gross_sales", "sum"),
+        "gross_product_sales": ("gross_product_sales", "sum"),
+        "refund_money": ("refund_money", "sum"),
+        "discount_amount": ("discount_amount", "sum"),
+        "cost_of_goods": ("cost_of_goods", "sum"),
+        "shipping_costs": ("shipping_costs", "sum"),
+        "estimated_shipping_costs": ("estimated_shipping_costs", "sum"),
+        "handling_fees": ("handling_fees", "sum"),
+        "payment_gateway_costs": ("payment_gateway_costs", "sum"),
+        "non_tracked_spend": ("non_tracked_spend", "sum"),
+        "impressions": ("impressions", "sum"),
+        "clicks": ("clicks", "sum"),
+        "onsite_purchases": ("onsite_purchases", "sum"),
+        "onsite_conversion_value": ("onsite_conversion_value", "sum"),
+        "meta_purchases": ("meta_purchases", "sum"),
+        "search_top_impressions": ("search_top_impressions", "sum"),
+        "search_absolute_top_impressions": ("search_absolute_top_impressions", "sum"),
+        "search_budget_lost_top_impressions": ("search_budget_lost_top_impressions", "sum"),
+        "search_budget_lost_absolute_top_impressions": (
+            "search_budget_lost_absolute_top_impressions",
+            "sum",
+        ),
+        "search_rank_lost_top_impressions": ("search_rank_lost_top_impressions", "sum"),
+        "search_rank_lost_impressions": ("search_rank_lost_impressions", "sum"),
+        "currency": ("currency", "first"),
+    }
+
+    for field in SEARCH_SHARE_FIELDS:
+        aggregations[f"{field}_weighted"] = (f"{field}_weighted", "sum")
+
+    for field in AI_PACING_FIELDS:
+        aggregations[field] = (field, "first")
+
+    grouped = df.groupby(["region", "local_date"], as_index=False).agg(**aggregations)
 
     grouped["total_spend"] = grouped["meta_spend"] + grouped["google_spend"]
 
@@ -137,6 +220,14 @@ def build_daily_report(records: Sequence[HourlyRegionMetrics]) -> pd.DataFrame:
         if num is None or pd.isna(num):
             return None
         return float(num) / float(den)
+
+    for field in SEARCH_SHARE_FIELDS:
+        weighted_col = f"{field}_weighted"
+        grouped[field] = grouped.apply(
+            lambda row, col=weighted_col: safe_div(row[col], row["impressions"]),
+            axis=1,
+        )
+        grouped.drop(columns=[weighted_col], inplace=True)
 
     grouped["returning_orders"] = (grouped["total_orders"] - grouped["new_customer_orders"]).clip(lower=0)
     grouped["returning_sales"] = grouped["total_sales"] - grouped["new_customer_sales"]
@@ -232,6 +323,27 @@ def to_daily_reports(records: Sequence[HourlyRegionMetrics]) -> list[DailyRegion
                 onsite_purchases=row.onsite_purchases,
                 onsite_conversion_value=row.onsite_conversion_value,
                 onsite_roas=row.onsite_roas,
+                search_impression_share=row.search_impression_share,
+                search_top_impression_share=row.search_top_impression_share,
+                search_absolute_top_impression_share=row.search_absolute_top_impression_share,
+                search_budget_lost_top_impression_share=row.search_budget_lost_top_impression_share,
+                search_budget_lost_absolute_top_impression_share=row.search_budget_lost_absolute_top_impression_share,
+                search_rank_lost_top_impression_share=row.search_rank_lost_top_impression_share,
+                search_rank_lost_impression_share=row.search_rank_lost_impression_share,
+                search_top_impressions=row.search_top_impressions,
+                search_absolute_top_impressions=row.search_absolute_top_impressions,
+                search_budget_lost_top_impressions=row.search_budget_lost_top_impressions,
+                search_budget_lost_absolute_top_impressions=row.search_budget_lost_absolute_top_impressions,
+                search_rank_lost_top_impressions=row.search_rank_lost_top_impressions,
+                search_rank_lost_impressions=row.search_rank_lost_impressions,
+                campaign_ai_recommendation=row.campaign_ai_recommendation,
+                campaign_ai_roas_pacing=row.campaign_ai_roas_pacing,
+                adset_ai_recommendation=row.adset_ai_recommendation,
+                adset_ai_roas_pacing=row.adset_ai_roas_pacing,
+                ad_ai_recommendation=row.ad_ai_recommendation,
+                ad_ai_roas_pacing=row.ad_ai_roas_pacing,
+                channel_ai_recommendation=row.channel_ai_recommendation,
+                channel_ai_roas_pacing=row.channel_ai_roas_pacing,
             )
         )
     return reports

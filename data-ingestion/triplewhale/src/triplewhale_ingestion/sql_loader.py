@@ -4,6 +4,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple
 
+import json
+
 from dateutil import tz
 
 from .config import Settings
@@ -27,27 +29,39 @@ REGION_TOKEN_SETS: Dict[str, set[str]] = {
 
 SUPPORTED_CHANNELS = {"facebook-ads", "google-ads"}
 
+SEARCH_SHARE_FIELDS = [
+    "search_impression_share",
+    "search_top_impression_share",
+    "search_absolute_top_impression_share",
+    "search_budget_lost_top_impression_share",
+    "search_budget_lost_absolute_top_impression_share",
+    "search_rank_lost_top_impression_share",
+    "search_rank_lost_impression_share",
+]
 
-def fetch_hourly_metrics(
-    client: TripleWhaleClient,
-    settings: Settings,
-    start_date: datetime,
-    end_date: datetime,
-) -> List[HourlyRegionMetrics]:
-    if not settings.triple_whale_shop_domain:
-        raise RuntimeError("TRIPLE_WHALE_SHOP_DOMAIN (or SHOPIFY_DOMAIN) must be set to run the pipeline.")
+SEARCH_IMPRESSIONS_FIELDS = [
+    "search_top_impressions",
+    "search_absolute_top_impressions",
+    "search_budget_lost_top_impressions",
+    "search_budget_lost_absolute_top_impressions",
+    "search_rank_lost_top_impressions",
+    "search_rank_lost_impressions",
+]
 
-    shop_timezone = _detect_shop_timezone(client, settings.triple_whale_shop_domain)
-    store_zone = tz.gettz(shop_timezone) or tz.UTC
-    account_region_map = (settings.triple_whale_account_region_map or {})
+AI_PACING_FIELDS = [
+    "campaign_ai_recommendation",
+    "campaign_ai_roas_pacing",
+    "adset_ai_recommendation",
+    "adset_ai_roas_pacing",
+    "ad_ai_recommendation",
+    "ad_ai_roas_pacing",
+    "channel_ai_recommendation",
+    "channel_ai_roas_pacing",
+]
 
-    buffer_start = start_date - timedelta(days=1)
-    buffer_end = end_date + timedelta(days=1)
 
-    order_rows = _fetch_orders_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
-    ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
-
-    buckets: Dict[Tuple[str, datetime], Dict[str, float]] = defaultdict(lambda: {
+def _make_bucket() -> Dict[str, float | str]:
+    bucket: Dict[str, float | str] = {
         "meta_spend": 0.0,
         "google_spend": 0.0,
         "new_customer_orders": 0.0,
@@ -70,7 +84,40 @@ def fetch_hourly_metrics(
         "onsite_conversion_value": 0.0,
         "meta_purchases": 0.0,
         "currency": "USD",
-    })
+    }
+
+    for field in SEARCH_SHARE_FIELDS:
+        bucket[f"{field}_weighted"] = 0.0
+
+    for field in SEARCH_IMPRESSIONS_FIELDS:
+        bucket[field] = 0.0
+
+    for field in AI_PACING_FIELDS:
+        bucket[field] = ""
+
+    return bucket
+
+
+def fetch_hourly_metrics(
+    client: TripleWhaleClient,
+    settings: Settings,
+    start_date: datetime,
+    end_date: datetime,
+) -> List[HourlyRegionMetrics]:
+    if not settings.triple_whale_shop_domain:
+        raise RuntimeError("TRIPLE_WHALE_SHOP_DOMAIN (or SHOPIFY_DOMAIN) must be set to run the pipeline.")
+
+    shop_timezone = _detect_shop_timezone(client, settings.triple_whale_shop_domain)
+    store_zone = tz.gettz(shop_timezone) or tz.UTC
+    account_region_map = (settings.triple_whale_account_region_map or {})
+
+    buffer_start = start_date - timedelta(days=1)
+    buffer_end = end_date + timedelta(days=1)
+
+    order_rows = _fetch_orders_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
+    ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
+
+    buckets: Dict[Tuple[str, datetime], Dict[str, float | str]] = defaultdict(_make_bucket)
 
     for row in order_rows:
         region = _region_from_country(row.get("shipping_country_code"))
@@ -117,8 +164,11 @@ def fetch_hourly_metrics(
             bucket["google_spend"] += spend_value
 
         bucket["non_tracked_spend"] += float(row.get("non_tracked_spend", 0.0) or 0.0)
-        bucket["impressions"] += float(row.get("impressions", 0.0) or 0.0)
-        bucket["clicks"] += float(row.get("clicks", 0.0) or 0.0)
+
+        impressions = float(row.get("impressions", 0.0) or 0.0)
+        bucket["impressions"] += impressions
+        clicks = float(row.get("clicks", 0.0) or 0.0)
+        bucket["clicks"] += clicks
         bucket["onsite_purchases"] += float(row.get("onsite_purchases", 0.0) or 0.0)
         bucket["onsite_conversion_value"] += float(row.get("onsite_conversion_value", 0.0) or 0.0)
         bucket["meta_purchases"] += float(row.get("meta_purchases", 0.0) or 0.0)
@@ -126,18 +176,75 @@ def fetch_hourly_metrics(
         if not bucket.get("currency") and row.get("currency"):
             bucket["currency"] = row["currency"]
 
+        for field in SEARCH_SHARE_FIELDS:
+            value = float(row.get(field, 0.0) or 0.0)
+            bucket[f"{field}_weighted"] += value * impressions
+
+        for field in SEARCH_IMPRESSIONS_FIELDS:
+            bucket[field] += float(row.get(field, 0.0) or 0.0)
+
+        for field in AI_PACING_FIELDS:
+            value = row.get(field)
+            if value and not bucket.get(field):
+                bucket[field] = value if isinstance(value, str) else json.dumps(value)
+
     records: List[HourlyRegionMetrics] = []
     for (region, timestamp), values in sorted(buckets.items(), key=lambda item: (item[0][0], item[0][1])):
+        impressions = float(values["impressions"])
+
+        def share_value(field: str) -> float:
+            weighted = float(values.get(f"{field}_weighted", 0.0))
+            if impressions <= 0:
+                return 0.0
+            return weighted / impressions
+
         records.append(
             HourlyRegionMetrics(
                 region=region,
                 timestamp_utc=timestamp,
-                meta_spend=values["meta_spend"],
-                google_spend=values["google_spend"],
-                new_customer_orders=int(round(values["new_customer_orders"])),
-                new_customer_sales=values["new_customer_sales"],
-                total_sales=values["total_sales"],
-                currency=values.get("currency", "USD"),
+                meta_spend=float(values["meta_spend"]),
+                google_spend=float(values["google_spend"]),
+                new_customer_orders=int(round(float(values["new_customer_orders"]))),
+                new_customer_sales=float(values["new_customer_sales"]),
+                total_sales=float(values["total_sales"]),
+                total_orders=float(values["total_orders"]),
+                gross_sales=float(values["gross_sales"]),
+                gross_product_sales=float(values["gross_product_sales"]),
+                refund_money=float(values["refund_money"]),
+                discount_amount=float(values["discount_amount"]),
+                cost_of_goods=float(values["cost_of_goods"]),
+                shipping_costs=float(values["shipping_costs"]),
+                estimated_shipping_costs=float(values["estimated_shipping_costs"]),
+                handling_fees=float(values["handling_fees"]),
+                payment_gateway_costs=float(values["payment_gateway_costs"]),
+                non_tracked_spend=float(values["non_tracked_spend"]),
+                impressions=impressions,
+                clicks=float(values["clicks"]),
+                onsite_purchases=float(values["onsite_purchases"]),
+                onsite_conversion_value=float(values["onsite_conversion_value"]),
+                meta_purchases=float(values["meta_purchases"]),
+                search_impression_share=share_value("search_impression_share"),
+                search_top_impression_share=share_value("search_top_impression_share"),
+                search_absolute_top_impression_share=share_value("search_absolute_top_impression_share"),
+                search_budget_lost_top_impression_share=share_value("search_budget_lost_top_impression_share"),
+                search_budget_lost_absolute_top_impression_share=share_value("search_budget_lost_absolute_top_impression_share"),
+                search_rank_lost_top_impression_share=share_value("search_rank_lost_top_impression_share"),
+                search_rank_lost_impression_share=share_value("search_rank_lost_impression_share"),
+                search_top_impressions=float(values["search_top_impressions"]),
+                search_absolute_top_impressions=float(values["search_absolute_top_impressions"]),
+                search_budget_lost_top_impressions=float(values["search_budget_lost_top_impressions"]),
+                search_budget_lost_absolute_top_impressions=float(values["search_budget_lost_absolute_top_impressions"]),
+                search_rank_lost_top_impressions=float(values["search_rank_lost_top_impressions"]),
+                search_rank_lost_impressions=float(values["search_rank_lost_impressions"]),
+                campaign_ai_recommendation=str(values["campaign_ai_recommendation"]),
+                campaign_ai_roas_pacing=str(values["campaign_ai_roas_pacing"]),
+                adset_ai_recommendation=str(values["adset_ai_recommendation"]),
+                adset_ai_roas_pacing=str(values["adset_ai_roas_pacing"]),
+                ad_ai_recommendation=str(values["ad_ai_recommendation"]),
+                ad_ai_roas_pacing=str(values["ad_ai_roas_pacing"]),
+                channel_ai_recommendation=str(values["channel_ai_recommendation"]),
+                channel_ai_roas_pacing=str(values["channel_ai_roas_pacing"]),
+                currency=str(values.get("currency", "USD")),
             )
         )
 
@@ -196,7 +303,28 @@ def _fetch_ads_hourly(
       sum(clicks) AS clicks,
       sum(onsite_purchases) AS onsite_purchases,
       sum(onsite_conversion_value) AS onsite_conversion_value,
-      sum(meta_purchases) AS meta_purchases
+      sum(meta_purchases) AS meta_purchases,
+      avg(search_impression_share) AS search_impression_share,
+      avg(search_top_impression_share) AS search_top_impression_share,
+      avg(search_absolute_top_impression_share) AS search_absolute_top_impression_share,
+      avg(search_budget_lost_top_impression_share) AS search_budget_lost_top_impression_share,
+      avg(search_budget_lost_absolute_top_impression_share) AS search_budget_lost_absolute_top_impression_share,
+      avg(search_rank_lost_top_impression_share) AS search_rank_lost_top_impression_share,
+      avg(search_rank_lost_impression_share) AS search_rank_lost_impression_share,
+      sum(search_top_impressions) AS search_top_impressions,
+      sum(search_absolute_top_impressions) AS search_absolute_top_impressions,
+      sum(search_budget_lost_top_impressions) AS search_budget_lost_top_impressions,
+      sum(search_budget_lost_absolute_top_impressions) AS search_budget_lost_absolute_top_impressions,
+      sum(search_rank_lost_top_impressions) AS search_rank_lost_top_impressions,
+      sum(search_rank_lost_impressions) AS search_rank_lost_impressions,
+      anyHeavy(toJSONString(campaign_ai_recommendation)) AS campaign_ai_recommendation,
+      anyHeavy(toJSONString(campaign_ai_roas_pacing)) AS campaign_ai_roas_pacing,
+      anyHeavy(toJSONString(adset_ai_recommendation)) AS adset_ai_recommendation,
+      anyHeavy(toJSONString(adset_ai_roas_pacing)) AS adset_ai_roas_pacing,
+      anyHeavy(toJSONString(ad_ai_recommendation)) AS ad_ai_recommendation,
+      anyHeavy(toJSONString(ad_ai_roas_pacing)) AS ad_ai_roas_pacing,
+      anyHeavy(toJSONString(channel_ai_recommendation)) AS channel_ai_recommendation,
+      anyHeavy(toJSONString(channel_ai_roas_pacing)) AS channel_ai_roas_pacing
     FROM ads_table
     WHERE event_date BETWEEN @startDate AND @endDate
       AND channel IN ('facebook-ads','google-ads')

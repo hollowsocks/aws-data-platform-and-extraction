@@ -30,6 +30,27 @@ def test_build_daily_report_aggregates_and_computes_kpis():
             onsite_purchases=5.0,
             onsite_conversion_value=500.0,
             meta_purchases=3.0,
+            search_impression_share=0.5,
+            search_top_impression_share=0.3,
+            search_absolute_top_impression_share=0.2,
+            search_budget_lost_top_impression_share=0.1,
+            search_budget_lost_absolute_top_impression_share=0.05,
+            search_rank_lost_top_impression_share=0.04,
+            search_rank_lost_impression_share=0.02,
+            search_top_impressions=200.0,
+            search_absolute_top_impressions=150.0,
+            search_budget_lost_top_impressions=20.0,
+            search_budget_lost_absolute_top_impressions=10.0,
+            search_rank_lost_top_impressions=5.0,
+            search_rank_lost_impressions=3.0,
+            campaign_ai_recommendation="{\"summary\": \"scale budget\"}",
+            campaign_ai_roas_pacing="{\"target\": 3.5}",
+            adset_ai_recommendation="{\"action\": \"test creative\"}",
+            adset_ai_roas_pacing="{\"target\": 2.8}",
+            ad_ai_recommendation="{\"note\": \"refresh copy\"}",
+            ad_ai_roas_pacing="{\"target\": 2.4}",
+            channel_ai_recommendation="{\"channel\": \"google\"}",
+            channel_ai_roas_pacing="{\"target\": 4.0}",
         ),
         HourlyRegionMetrics(
             region="UK",
@@ -55,6 +76,27 @@ def test_build_daily_report_aggregates_and_computes_kpis():
             onsite_purchases=2.0,
             onsite_conversion_value=150.0,
             meta_purchases=1.0,
+            search_impression_share=0.25,
+            search_top_impression_share=0.2,
+            search_absolute_top_impression_share=0.1,
+            search_budget_lost_top_impression_share=0.05,
+            search_budget_lost_absolute_top_impression_share=0.02,
+            search_rank_lost_top_impression_share=0.01,
+            search_rank_lost_impression_share=0.005,
+            search_top_impressions=80.0,
+            search_absolute_top_impressions=60.0,
+            search_budget_lost_top_impressions=8.0,
+            search_budget_lost_absolute_top_impressions=4.0,
+            search_rank_lost_top_impressions=2.0,
+            search_rank_lost_impressions=1.0,
+            campaign_ai_recommendation="",
+            campaign_ai_roas_pacing="",
+            adset_ai_recommendation="",
+            adset_ai_roas_pacing="",
+            ad_ai_recommendation="",
+            ad_ai_roas_pacing="",
+            channel_ai_recommendation="",
+            channel_ai_roas_pacing="",
         ),
     ]
 
@@ -88,6 +130,11 @@ def test_build_daily_report_aggregates_and_computes_kpis():
     assert round(row["cpm"], 2) == round((200 * 1000) / 1400, 2)
     assert round(row["onsite_roas"], 2) == round(650 / 200, 2)
     assert row["currency"] == "USD"
+    assert round(row["search_impression_share"], 4) == round((0.5 * 1000 + 0.25 * 400) / 1400, 4)
+    assert round(row["search_top_impression_share"], 4) == round((0.3 * 1000 + 0.2 * 400) / 1400, 4)
+    assert row["search_top_impressions"] == 280.0
+    assert row["search_rank_lost_impressions"] == 4.0
+    assert row["campaign_ai_recommendation"] == "{\"summary\": \"scale budget\"}"
 
 
 def test_build_hourly_table_adds_local_time_columns():
@@ -143,6 +190,27 @@ def test_build_hourly_table_adds_local_time_columns():
         "cpm",
         "onsite_conversion_value",
         "onsite_roas",
+        "search_impression_share",
+        "search_top_impression_share",
+        "search_absolute_top_impression_share",
+        "search_budget_lost_top_impression_share",
+        "search_budget_lost_absolute_top_impression_share",
+        "search_rank_lost_top_impression_share",
+        "search_rank_lost_impression_share",
+        "search_top_impressions",
+        "search_absolute_top_impressions",
+        "search_budget_lost_top_impressions",
+        "search_budget_lost_absolute_top_impressions",
+        "search_rank_lost_top_impressions",
+        "search_rank_lost_impressions",
+        "campaign_ai_recommendation",
+        "campaign_ai_roas_pacing",
+        "adset_ai_recommendation",
+        "adset_ai_roas_pacing",
+        "ad_ai_recommendation",
+        "ad_ai_roas_pacing",
+        "channel_ai_recommendation",
+        "channel_ai_roas_pacing",
         "local_datetime",
         "local_date",
         "local_hour",
@@ -172,3 +240,4 @@ def test_build_hourly_table_adds_local_time_columns():
     assert round(df.loc[0, "cpc"], 3) == round(15 / 20, 3)
     assert round(df.loc[0, "cpm"], 2) == round((15 * 1000) / 200, 2)
     assert df.loc[0, "onsite_roas"] == 60 / 15
+    assert df.loc[0, "search_impression_share"] == 0.0
