@@ -263,6 +263,60 @@ Resources:
               Type: string
             - Name: currency
               Type: string
+            - Name: total_orders
+              Type: double
+            - Name: returning_orders
+              Type: double
+            - Name: returning_sales
+              Type: double
+            - Name: net_sales
+              Type: double
+            - Name: gross_sales
+              Type: double
+            - Name: gross_product_sales
+              Type: double
+            - Name: refund_money
+              Type: double
+            - Name: discount_amount
+              Type: double
+            - Name: cost_of_goods
+              Type: double
+            - Name: shipping_costs
+              Type: double
+            - Name: estimated_shipping_costs
+              Type: double
+            - Name: handling_fees
+              Type: double
+            - Name: payment_gateway_costs
+              Type: double
+            - Name: gross_profit
+              Type: double
+            - Name: gross_margin
+              Type: double
+            - Name: discount_rate
+              Type: double
+            - Name: refund_rate
+              Type: double
+            - Name: non_tracked_spend
+              Type: double
+            - Name: impressions
+              Type: double
+            - Name: clicks
+              Type: double
+            - Name: ctr
+              Type: double
+            - Name: cpc
+              Type: double
+            - Name: cpm
+              Type: double
+            - Name: meta_purchases
+              Type: double
+            - Name: onsite_purchases
+              Type: double
+            - Name: onsite_conversion_value
+              Type: double
+            - Name: onsite_roas
+              Type: double
           Location: !Sub s3://${OutputBucketName}/hourly/
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
@@ -399,7 +453,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
               "Parameters": {
-                "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${AthenaDatabaseName}.${AthenaTableName} ( timestamp_utc timestamp, meta_spend double, google_spend double, new_customer_orders bigint, new_customer_sales double, total_sales double, total_spend double, new_customer_cpp double, new_customer_aov double, new_customer_roas double, blended_roas double, local_datetime timestamp, local_date date, local_hour string, central_datetime timestamp, central_hour string, currency string ) PARTITIONED BY ( year string, month string, day string, region string ) STORED AS PARQUET LOCATION 's3://${OutputBucketName}/hourly/' TBLPROPERTIES ('parquet.compress'='SNAPPY')",
+                "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${AthenaDatabaseName}.${AthenaTableName} ( timestamp_utc timestamp, meta_spend double, google_spend double, new_customer_orders bigint, new_customer_sales double, total_sales double, total_spend double, new_customer_cpp double, new_customer_aov double, new_customer_roas double, blended_roas double, local_datetime timestamp, local_date date, local_hour string, central_datetime timestamp, central_hour string, currency string, total_orders double, returning_orders double, returning_sales double, net_sales double, gross_sales double, gross_product_sales double, refund_money double, discount_amount double, cost_of_goods double, shipping_costs double, estimated_shipping_costs double, handling_fees double, payment_gateway_costs double, gross_profit double, gross_margin double, discount_rate double, refund_rate double, non_tracked_spend double, impressions double, clicks double, ctr double, cpc double, cpm double, meta_purchases double, onsite_purchases double, onsite_conversion_value double, onsite_roas double ) PARTITIONED BY ( year string, month string, day string, region string ) STORED AS PARQUET LOCATION 's3://${OutputBucketName}/hourly/' TBLPROPERTIES ('parquet.compress'='SNAPPY')",
                 "QueryExecutionContext": {
                   "Database": "${AthenaDatabaseName}"
                 },

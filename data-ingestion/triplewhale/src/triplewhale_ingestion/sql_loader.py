@@ -53,6 +53,22 @@ def fetch_hourly_metrics(
         "new_customer_orders": 0.0,
         "new_customer_sales": 0.0,
         "total_sales": 0.0,
+        "total_orders": 0.0,
+        "gross_sales": 0.0,
+        "gross_product_sales": 0.0,
+        "refund_money": 0.0,
+        "discount_amount": 0.0,
+        "cost_of_goods": 0.0,
+        "shipping_costs": 0.0,
+        "estimated_shipping_costs": 0.0,
+        "handling_fees": 0.0,
+        "payment_gateway_costs": 0.0,
+        "non_tracked_spend": 0.0,
+        "impressions": 0.0,
+        "clicks": 0.0,
+        "onsite_purchases": 0.0,
+        "onsite_conversion_value": 0.0,
+        "meta_purchases": 0.0,
         "currency": "USD",
     })
 
@@ -67,6 +83,16 @@ def fetch_hourly_metrics(
         bucket["total_sales"] += float(row.get("total_sales", 0.0) or 0.0)
         bucket["new_customer_sales"] += float(row.get("new_customer_sales", 0.0) or 0.0)
         bucket["new_customer_orders"] += float(row.get("new_customer_orders", 0.0) or 0.0)
+        bucket["total_orders"] += float(row.get("total_orders", 0.0) or 0.0)
+        bucket["gross_sales"] += float(row.get("gross_sales", 0.0) or 0.0)
+        bucket["gross_product_sales"] += float(row.get("gross_product_sales", 0.0) or 0.0)
+        bucket["refund_money"] += float(row.get("refund_money", 0.0) or 0.0)
+        bucket["discount_amount"] += float(row.get("discount_amount", 0.0) or 0.0)
+        bucket["cost_of_goods"] += float(row.get("cost_of_goods", 0.0) or 0.0)
+        bucket["shipping_costs"] += float(row.get("shipping_costs", 0.0) or 0.0)
+        bucket["estimated_shipping_costs"] += float(row.get("estimated_shipping_costs", 0.0) or 0.0)
+        bucket["handling_fees"] += float(row.get("handling_fees", 0.0) or 0.0)
+        bucket["payment_gateway_costs"] += float(row.get("payment_gateway_costs", 0.0) or 0.0)
         currency = row.get("currency") or bucket.get("currency")
         if currency:
             bucket["currency"] = currency
@@ -89,6 +115,13 @@ def fetch_hourly_metrics(
             bucket["meta_spend"] += spend_value
         elif channel == "google-ads":
             bucket["google_spend"] += spend_value
+
+        bucket["non_tracked_spend"] += float(row.get("non_tracked_spend", 0.0) or 0.0)
+        bucket["impressions"] += float(row.get("impressions", 0.0) or 0.0)
+        bucket["clicks"] += float(row.get("clicks", 0.0) or 0.0)
+        bucket["onsite_purchases"] += float(row.get("onsite_purchases", 0.0) or 0.0)
+        bucket["onsite_conversion_value"] += float(row.get("onsite_conversion_value", 0.0) or 0.0)
+        bucket["meta_purchases"] += float(row.get("meta_purchases", 0.0) or 0.0)
 
         if not bucket.get("currency") and row.get("currency"):
             bucket["currency"] = row["currency"]
@@ -124,7 +157,17 @@ def _fetch_orders_hourly(
       anyHeavy(currency) AS currency,
       sum(order_revenue) AS total_sales,
       sumIf(order_revenue, is_new_customer) AS new_customer_sales,
-      sumIf(orders_quantity, is_new_customer) AS new_customer_orders
+      sumIf(orders_quantity, is_new_customer) AS new_customer_orders,
+      sum(orders_quantity) AS total_orders,
+      sum(gross_sales) AS gross_sales,
+      sum(gross_product_sales) AS gross_product_sales,
+      sum(refund_money) AS refund_money,
+      sum(discount_amount) AS discount_amount,
+      sum(cost_of_goods) AS cost_of_goods,
+      sum(shipping_costs) AS shipping_costs,
+      sum(estimated_shipping_costs) AS estimated_shipping_costs,
+      sum(handling_fees) AS handling_fees,
+      sum(payment_gateway_costs) AS payment_gateway_costs
     FROM orders_table
     WHERE event_date BETWEEN @startDate AND @endDate
       AND shipping_country_code IN ('US','CA','GB','UK','AU')
@@ -147,7 +190,13 @@ def _fetch_ads_hourly(
       campaign_name,
       adset_name,
       anyHeavy(currency) AS currency,
-      sum(spend) AS spend
+      sum(spend) AS spend,
+      sum(non_tracked_spend) AS non_tracked_spend,
+      sum(impressions) AS impressions,
+      sum(clicks) AS clicks,
+      sum(onsite_purchases) AS onsite_purchases,
+      sum(onsite_conversion_value) AS onsite_conversion_value,
+      sum(meta_purchases) AS meta_purchases
     FROM ads_table
     WHERE event_date BETWEEN @startDate AND @endDate
       AND channel IN ('facebook-ads','google-ads')
