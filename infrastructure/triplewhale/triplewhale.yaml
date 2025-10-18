@@ -106,7 +106,6 @@ Resources:
 
   DataRefreshFunction:
     Type: AWS::Lambda::Function
-    DependsOn: LambdaExecutionRole
     Properties:
       FunctionName: growth-reporting-refresh
       Description: Pulls Triple Whale data and writes hourly dataset to S3

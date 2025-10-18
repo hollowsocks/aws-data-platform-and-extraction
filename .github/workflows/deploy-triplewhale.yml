@@ -109,14 +109,14 @@ jobs:
             --stack-name $STACK_NAME \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              OutputBucketName=${DATA_LAKE_BUCKET} \
-              LambdaCodeS3Bucket=${LAMBDA_ARTIFACT_BUCKET} \
-              LambdaCodeS3Key=$LAMBDA_ARTIFACT_KEY \
-              TripleWhaleSecretArn=${TRIPLE_WHALE_SECRET_ARN} \
-              AthenaResultBucket=${ATHENA_RESULTS_BUCKET} \
-              AthenaDatabaseName=${ATHENA_DATABASE_NAME} \
-              AthenaTableName=${ATHENA_TABLE_NAME} \
-              GlueCrawlerName=${GLUE_CRAWLER_NAME} \
-              EventScheduleExpression=${EVENT_SCHEDULE_EXPRESSION} \
-              ApiGatewayHttpApiId=${API_GATEWAY_HTTP_API_ID} \
-              ApiGatewayAuthorizerId=${API_GATEWAY_AUTHORIZER_ID}
+              OutputBucketName="${DATA_LAKE_BUCKET}" \
+              LambdaCodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
+              LambdaCodeS3Key="$LAMBDA_ARTIFACT_KEY" \
+              TripleWhaleSecretArn="${TRIPLE_WHALE_SECRET_ARN}" \
+              AthenaResultBucket="${ATHENA_RESULTS_BUCKET}" \
+              AthenaDatabaseName="${ATHENA_DATABASE_NAME}" \
+              AthenaTableName="${ATHENA_TABLE_NAME}" \
+              GlueCrawlerName="${GLUE_CRAWLER_NAME}" \
+              EventScheduleExpression="${EVENT_SCHEDULE_EXPRESSION}" \
+              ApiGatewayHttpApiId="${API_GATEWAY_HTTP_API_ID}" \
+              ApiGatewayAuthorizerId="${API_GATEWAY_AUTHORIZER_ID}"
