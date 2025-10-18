@@ -1,63 +1,59 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: TripleWhale hourly ingestion pipeline (Lambda + Step Functions + Glue)
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Serverless pipeline for Growth Reporting Engine (S3 + Athena)
 
 Parameters:
-  DataLakeBucket:
+  OutputBucketName:
     Type: String
-    Description: S3 bucket where hourly TripleWhale parquet files are stored
-  OutputPrefix:
+    Description: "S3 bucket that will store hourly growth reporting files"
+  LambdaCodeS3Bucket:
     Type: String
-    Default: hourly
-    Description: Prefix under DataLakeBucket for writing parquet files
-  LambdaArtifactBucket:
+    Description: "S3 bucket containing the Lambda deployment package (zip)"
+  LambdaCodeS3Key:
     Type: String
-    Description: S3 bucket containing the packaged Lambda artifact (zip)
-  LambdaArtifactKey:
-    Type: String
-    Description: S3 key of the packaged Lambda artifact
+    Description: "S3 key for the Lambda deployment package"
   TripleWhaleSecretArn:
     Type: String
-    Default: ''
-    Description: Optional Secrets Manager ARN containing TRIPLE_WHALE_* keys
+    Default: ""
+    Description: "(Optional) ARN of Secrets Manager secret (JSON with TRIPLE_WHALE_* keys)"
   AthenaResultBucket:
     Type: String
-    Description: Bucket used by Athena for query results (s3://bucket[/prefix])
+    Description: "S3 bucket used by Athena for query results (staging directory)"
   AthenaDatabaseName:
     Type: String
     Default: growth_reporting
-    Description: Glue/Athena database name for TripleWhale tables
+    Description: "Glue/Athena database name that catalogs the hourly table"
   AthenaTableName:
     Type: String
     Default: growth_report_hourly
-    Description: Glue/Athena table name for the hourly dataset
+    Description: "Table name created/maintained by the Glue crawler"
   GlueCrawlerName:
     Type: String
     Default: growth-reporting-hourly-crawler
-    Description: Name of the Glue crawler that syncs the hourly dataset
+    Description: "Glue crawler name"
   EventScheduleExpression:
     Type: String
     Default: cron(15 * * * ? *)
-    Description: EventBridge schedule that triggers the refresh (default hourly)
+    Description: "EventBridge schedule for automatic refresh (default: hourly at minute 15)"
   ApiGatewayHttpApiId:
     Type: String
-    Default: ''
-    Description: Optional HTTP API ID to expose a manual refresh endpoint
+    Default: q20ffpu472
+    Description: "Existing API Gateway HTTP API ID to attach routes to"
   ApiGatewayAuthorizerId:
     Type: String
-    Default: ''
-    Description: Optional authorizer ID for the manual refresh endpoint
+    Default: fnaf8s
+    Description: "(Optional) Authorizer ID for secured routes; leave blank for none"
 
 Conditions:
-  HasSecret: !Not [!Equals [!Ref TripleWhaleSecretArn, '']]
-  HasHttpApi: !Not [!Equals [!Ref ApiGatewayHttpApiId, '']]
-  HasAuthorizer: !Not [!Equals [!Ref ApiGatewayAuthorizerId, '']]
+  HasSecret: !Not [!Equals [!Ref TripleWhaleSecretArn, ""]]
+  HasAuthorizer: !Not [!Equals [!Ref ApiGatewayAuthorizerId, ""]]
+
 
 Resources:
-  TripleWhaleLambdaRole:
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -66,9 +62,9 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: TripleWhaleIngestionS3Access
+        - PolicyName: LambdaGrowthReportingPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -77,8 +73,8 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}/*
               - Effect: Allow
                 Action:
                   - s3:PutObject
@@ -93,54 +89,54 @@ Resources:
                   - glue:StartCrawler
                 Resource: !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:crawler/${GlueCrawlerName}
 
-  TripleWhaleLambdaSecretPolicy:
+  LambdaSecretAccessPolicy:
     Type: AWS::IAM::Policy
     Condition: HasSecret
     Properties:
-      PolicyName: TripleWhaleLambdaSecrets
+      PolicyName: LambdaSecretAccess
       Roles:
-        - !Ref TripleWhaleLambdaRole
+        - !Ref LambdaExecutionRole
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Action:
               - secretsmanager:GetSecretValue
             Resource: !Ref TripleWhaleSecretArn
 
-  TripleWhaleIngestionFunction:
+  DataRefreshFunction:
     Type: AWS::Lambda::Function
-    DependsOn: TripleWhaleLambdaRole
+    DependsOn: LambdaExecutionRole
     Properties:
       FunctionName: growth-reporting-refresh
-      Description: Pulls TripleWhale hourly data and writes parquet to the data lake
-      Role: !GetAtt TripleWhaleLambdaRole.Arn
-      Runtime: python3.11
+      Description: Pulls Triple Whale data and writes hourly dataset to S3
+      Role: !GetAtt LambdaExecutionRole.Arn
       Handler: app.handler
+      Runtime: python3.11
       Timeout: 900
       MemorySize: 2048
       TracingConfig:
         Mode: Active
       Environment:
         Variables:
-          OUTPUT_BUCKET: !Ref DataLakeBucket
-          OUTPUT_PREFIX: !Ref OutputPrefix
+          OUTPUT_BUCKET: !Ref OutputBucketName
+          OUTPUT_PREFIX: hourly
           GLUE_CRAWLER_NAME: !Ref GlueCrawlerName
           ATHENA_DATABASE: !Ref AthenaDatabaseName
           ATHENA_TABLE: !Ref AthenaTableName
           ATHENA_RESULTS_BUCKET: !Ref AthenaResultBucket
           TW_SECRET_ARN: !Ref TripleWhaleSecretArn
           OUTPUT_FORMAT: parquet
-          PARTITION_BY_HOUR: 'false'
+          PARTITION_BY_HOUR: "false"
       Code:
-        S3Bucket: !Ref LambdaArtifactBucket
-        S3Key: !Ref LambdaArtifactKey
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
 
-  TripleWhaleRefreshTriggerRole:
+  RefreshTriggerRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -149,41 +145,40 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: TripleWhaleTriggerPolicy
+        - PolicyName: RefreshTriggerPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - states:StartExecution
-                Resource: arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:growth-reporting-refresh
+                Resource: !Sub arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:growth-reporting-refresh
 
-  TripleWhaleRefreshTriggerFunction:
+  RefreshTriggerFunction:
     Type: AWS::Lambda::Function
-    DependsOn:
-      - TripleWhaleRefreshTriggerRole
+    DependsOn: RefreshTriggerRole
     Properties:
       FunctionName: growth-reporting-refresh-trigger
-      Description: Starts the TripleWhale refresh state machine
-      Role: !GetAtt TripleWhaleRefreshTriggerRole.Arn
-      Runtime: python3.11
+      Description: Starts the Step Functions execution for growth reporting refresh
+      Role: !GetAtt RefreshTriggerRole.Arn
       Handler: refresh_trigger.lambda_handler
+      Runtime: python3.11
       Timeout: 60
       MemorySize: 256
       TracingConfig:
         Mode: Active
       Environment:
         Variables:
-          STATE_MACHINE_ARN: !GetAtt TripleWhaleRefreshStateMachine.Arn
+          STATE_MACHINE_ARN: !GetAtt RefreshStateMachine.Arn
       Code:
-        S3Bucket: !Ref LambdaArtifactBucket
-        S3Key: !Ref LambdaArtifactKey
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
 
-  TripleWhaleGlueRole:
+  GlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -192,9 +187,9 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
       Policies:
-        - PolicyName: TripleWhaleGlueAccess
+        - PolicyName: GlueCrawlerAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -203,8 +198,8 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}/*
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -215,15 +210,15 @@ Resources:
                   - !Sub arn:${AWS::Partition}:s3:::${AthenaResultBucket}
                   - !Sub arn:${AWS::Partition}:s3:::${AthenaResultBucket}/*
 
-  TripleWhaleGlueDatabase:
+  GrowthGlueDatabase:
     Type: AWS::Glue::Database
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
         Name: !Ref AthenaDatabaseName
-        Description: TripleWhale hourly dataset
+        Description: Growth reporting hourly data
 
-  TripleWhaleGlueTable:
+  GrowthGlueTable:
     Type: AWS::Glue::Table
     Properties:
       CatalogId: !Ref AWS::AccountId
@@ -231,6 +226,9 @@ Resources:
       TableInput:
         Name: !Ref AthenaTableName
         TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: parquet
+          parquet.compress: SNAPPY
         StorageDescriptor:
           Columns:
             - Name: timestamp_utc
@@ -267,13 +265,15 @@ Resources:
               Type: string
             - Name: currency
               Type: string
-          Location: !Sub s3://${DataLakeBucket}/${OutputPrefix}/
+          Location: !Sub s3://${OutputBucketName}/hourly/
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Compressed: false
+          NumberOfBuckets: -1
           SerdeInfo:
             SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
             Parameters:
-              serialization.format: '1'
+              serialization.format: "1"
           StoredAsSubDirectories: false
         PartitionKeys:
           - Name: year
@@ -285,38 +285,38 @@ Resources:
           - Name: region
             Type: string
 
-  TripleWhaleGlueCrawler:
+  GrowthGlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
       Name: !Ref GlueCrawlerName
-      Role: !GetAtt TripleWhaleGlueRole.Arn
+      Role: !GetAtt GlueCrawlerRole.Arn
       DatabaseName: !Ref AthenaDatabaseName
       Targets:
         S3Targets:
-          - Path: !Sub s3://${DataLakeBucket}/${OutputPrefix}/
+          - Path: !Sub s3://${OutputBucketName}/hourly/
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
 
-  TripleWhaleStateMachineRole:
+  StateMachineRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: states.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: TripleWhaleStateMachinePolicy
+        - PolicyName: StepFunctionInvokePolicies
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt TripleWhaleIngestionFunction.Arn
+                Resource: !GetAtt DataRefreshFunction.Arn
               - Effect: Allow
                 Action:
                   - glue:StartCrawler
@@ -332,14 +332,10 @@ Resources:
                 Action:
                   - glue:GetDatabase
                   - glue:GetTable
-                  - glue:GetPartition
                   - glue:CreateTable
                   - glue:GetPartitions
                   - glue:CreatePartition
                   - glue:BatchCreatePartition
-                  - glue:DeleteTable
-                  - glue:DeletePartition
-                  - glue:BatchDeletePartition
                 Resource:
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${AthenaDatabaseName}
@@ -350,7 +346,7 @@ Resources:
                   - s3:GetBucketLocation
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${AthenaResultBucket}
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -358,36 +354,36 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${AthenaResultBucket}/*
-                  - !Sub arn:${AWS::Partition}:s3:::${DataLakeBucket}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${OutputBucketName}/*
 
-  TripleWhaleRefreshStateMachine:
+  RefreshStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: growth-reporting-refresh
-      RoleArn: !GetAtt TripleWhaleStateMachineRole.Arn
+      RoleArn: !GetAtt StateMachineRole.Arn
       DefinitionString: !Sub |
         {
-          "Comment": "TripleWhale hourly refresh",
-          "StartAt": "RunIngestion",
+          "Comment": "Growth reporting refresh",
+          "StartAt": "RunExtraction",
           "States": {
-            "RunIngestion": {
+            "RunExtraction": {
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "ResultPath": "$",
               "Parameters": {
-                "FunctionName": "${TripleWhaleIngestionFunction.Arn}",
+                "FunctionName": "${DataRefreshFunction.Arn}",
                 "Payload.$": "$"
               },
-              "Next": "DropTable"
+              "Next": "DropAthenaTable"
             },
-            "DropTable": {
+            "DropAthenaTable": {
               "Type": "Task",
               "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
               "Catch": [
                 {
                   "ErrorEquals": ["States.TaskFailed"],
                   "ResultPath": null,
-                  "Next": "EnsureTable"
+                  "Next": "EnsureAthenaTable"
                 }
               ],
               "Parameters": {
@@ -399,13 +395,13 @@ Resources:
                   "OutputLocation": "s3://${AthenaResultBucket}/athena-results/"
                 }
               },
-              "Next": "EnsureTable"
+              "Next": "EnsureAthenaTable"
             },
-            "EnsureTable": {
+            "EnsureAthenaTable": {
               "Type": "Task",
               "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
               "Parameters": {
-                "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${AthenaDatabaseName}.${AthenaTableName} ( timestamp_utc timestamp, meta_spend double, google_spend double, new_customer_orders bigint, new_customer_sales double, total_sales double, total_spend double, new_customer_cpp double, new_customer_aov double, new_customer_roas double, blended_roas double, local_datetime timestamp, local_date date, local_hour string, central_datetime timestamp, central_hour string, currency string ) PARTITIONED BY ( year string, month string, day string, region string ) STORED AS PARQUET LOCATION 's3://${DataLakeBucket}/${OutputPrefix}/' TBLPROPERTIES ('parquet.compress'='SNAPPY')",
+                "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${AthenaDatabaseName}.${AthenaTableName} ( timestamp_utc timestamp, meta_spend double, google_spend double, new_customer_orders bigint, new_customer_sales double, total_sales double, total_spend double, new_customer_cpp double, new_customer_aov double, new_customer_roas double, blended_roas double, local_datetime timestamp, local_date date, local_hour string, central_datetime timestamp, central_hour string, currency string ) PARTITIONED BY ( year string, month string, day string, region string ) STORED AS PARQUET LOCATION 's3://${OutputBucketName}/hourly/' TBLPROPERTIES ('parquet.compress'='SNAPPY')",
                 "QueryExecutionContext": {
                   "Database": "${AthenaDatabaseName}"
                 },
@@ -427,9 +423,9 @@ Resources:
                   "OutputLocation": "s3://${AthenaResultBucket}/athena-results/"
                 }
               },
-              "Next": "StartCrawler"
+              "Next": "StartGlueCrawler"
             },
-            "StartCrawler": {
+            "StartGlueCrawler": {
               "Type": "Task",
               "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
               "Parameters": {
@@ -440,86 +436,79 @@ Resources:
           }
         }
 
-  TripleWhaleLambdaInvokePermission:
+  LambdaInvokePermissionForStepFunction:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref TripleWhaleIngestionFunction
+      FunctionName: !Ref DataRefreshFunction
       Action: lambda:InvokeFunction
       Principal: states.amazonaws.com
-      SourceArn: !GetAtt TripleWhaleRefreshStateMachine.Arn
+      SourceArn: !GetAtt RefreshStateMachine.Arn
 
-  TripleWhaleEventBridgeRule:
+  EventBridgeRule:
     Type: AWS::Events::Rule
     Properties:
       Name: growth-reporting-refresh-schedule
       ScheduleExpression: !Ref EventScheduleExpression
       State: ENABLED
       Targets:
-        - Id: TripleWhaleRefresh
-          Arn: !GetAtt TripleWhaleRefreshStateMachine.Arn
-          RoleArn: !GetAtt TripleWhaleEventBridgeInvokeRole.Arn
+        - Id: GrowthRefreshStateMachine
+          Arn: !GetAtt RefreshStateMachine.Arn
+          RoleArn: !GetAtt EventBridgeInvokeRole.Arn
 
-  TripleWhaleEventBridgeInvokeRole:
+
+  ApiTriggerIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayHttpApiId
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt RefreshTriggerFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: "2.0"
+
+  ApiTriggerRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayHttpApiId
+      RouteKey: POST /growth-reporting/refresh
+      Target: !Join ['', ['integrations/', !Ref ApiTriggerIntegration]]
+      AuthorizationType: !If [HasAuthorizer, "CUSTOM", "NONE"]
+      AuthorizerId: !If [HasAuthorizer, !Ref ApiGatewayAuthorizerId, !Ref AWS::NoValue]
+
+  ApiTriggerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RefreshTriggerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayHttpApiId}/*/POST/growth-reporting/refresh
+
+  EventBridgeInvokeRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: events.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: TripleWhaleEventsToSfn
+        - PolicyName: AllowEventsToStartStateMachine
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: states:StartExecution
-                Resource: !GetAtt TripleWhaleRefreshStateMachine.Arn
-
-  TripleWhaleApiIntegration:
-    Type: AWS::ApiGatewayV2::Integration
-    Condition: HasHttpApi
-    Properties:
-      ApiId: !Ref ApiGatewayHttpApiId
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt TripleWhaleRefreshTriggerFunction.Arn
-      IntegrationMethod: POST
-      PayloadFormatVersion: '2.0'
-
-  TripleWhaleApiRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Condition: HasHttpApi
-    Properties:
-      ApiId: !Ref ApiGatewayHttpApiId
-      RouteKey: POST /growth-reporting/refresh
-      Target: !Join ['', ['integrations/', !Ref TripleWhaleApiIntegration]]
-      AuthorizationType: !If [HasAuthorizer, CUSTOM, NONE]
-      AuthorizerId: !If [HasAuthorizer, !Ref ApiGatewayAuthorizerId, !Ref AWS::NoValue]
-
-  TripleWhaleApiPermission:
-    Type: AWS::Lambda::Permission
-    Condition: HasHttpApi
-    Properties:
-      FunctionName: !Ref TripleWhaleRefreshTriggerFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayHttpApiId}/*/POST/growth-reporting/refresh
+                Resource: !GetAtt RefreshStateMachine.Arn
 
 Outputs:
-  IngestionFunctionName:
-    Description: Name of the TripleWhale ingestion Lambda function
-    Value: !Ref TripleWhaleIngestionFunction
+  S3BucketName:
+    Value: !Ref OutputBucketName
+    Description: Bucket containing hourly growth reporting files
   StateMachineArn:
-    Description: ARN of the TripleWhale refresh state machine
-    Value: !GetAtt TripleWhaleRefreshStateMachine.Arn
+    Value: !GetAtt RefreshStateMachine.Arn
+    Description: ARN of the refresh state machine
   GlueDatabaseName:
-    Description: Glue database containing the TripleWhale tables
     Value: !Ref AthenaDatabaseName
   GlueCrawlerName:
-    Description: Name of the Glue crawler that updates the dataset
     Value: !Ref GlueCrawlerName
-  DataLakePrefix:
-    Description: S3 location for the hourly dataset
-    Value: !Sub s3://${DataLakeBucket}/${OutputPrefix}/

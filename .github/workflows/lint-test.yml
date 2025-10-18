@@ -19,6 +19,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Lint CloudFormation templates
-        run: cfn-lint infrastructure/*.yaml
+        run: |
+          find infrastructure -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | \
+            xargs -0 -r cfn-lint
       - name: Run tests
         run: pytest
