@@ -117,6 +117,6 @@ jobs:
               AthenaDatabaseName=${ATHENA_DATABASE_NAME} \
               AthenaTableName=${ATHENA_TABLE_NAME} \
               GlueCrawlerName=${GLUE_CRAWLER_NAME} \
-              EventScheduleExpression='${EVENT_SCHEDULE_EXPRESSION}' \
-              ApiGatewayHttpApiId='${API_GATEWAY_HTTP_API_ID}' \
-              ApiGatewayAuthorizerId='${API_GATEWAY_AUTHORIZER_ID}'
+              EventScheduleExpression=${EVENT_SCHEDULE_EXPRESSION} \
+              ApiGatewayHttpApiId=${API_GATEWAY_HTTP_API_ID} \
+              ApiGatewayAuthorizerId=${API_GATEWAY_AUTHORIZER_ID}
