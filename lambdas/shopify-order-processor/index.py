@@ -44,9 +44,11 @@ def handler(event: Dict[str, Any], _: Any) -> Dict[str, Any]:
     if not enriched_order.get("created_at") and event_time:
         enriched_order["created_at"] = event_time
 
-    if is_recent_order(enriched_order):
+    if enriched_order.get("order_id") and is_recent_order(enriched_order):
         store_in_dynamodb(enriched_order)
         logger.info("Stored order %s in DynamoDB", order_id)
+    else:
+        logger.debug("Skipping DynamoDB upsert for order payload lacking core identifiers")
 
     return {
         "statusCode": 200,

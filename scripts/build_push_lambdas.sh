@@ -67,4 +67,13 @@ for dir in "${LAMBDA_DIRS_ARRAY[@]}"; do
   docker build --platform linux/amd64 -t "$IMAGE_URI" "lambdas/$dir"
   docker push "$IMAGE_URI"
   echo "$dir -> $IMAGE_URI"
+
+  FUNCTION_NAME="${BRAND}-${dir}"
+  echo "Updating Lambda function $FUNCTION_NAME to $IMAGE_URI"
+  if ! aws lambda update-function-code \
+    --function-name "$FUNCTION_NAME" \
+    --image-uri "$IMAGE_URI" \
+    --region "$REGION" >/dev/null 2>&1; then
+    echo "Warning: unable to update Lambda function $FUNCTION_NAME (it may not exist yet)." >&2
+  fi
 done
