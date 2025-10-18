@@ -155,7 +155,6 @@ Resources:
 
   RefreshTriggerFunction:
     Type: AWS::Lambda::Function
-    DependsOn: RefreshTriggerRole
     Properties:
       FunctionName: growth-reporting-refresh-trigger
       Description: Starts the Step Functions execution for growth reporting refresh
