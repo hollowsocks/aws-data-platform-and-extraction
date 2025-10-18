@@ -77,7 +77,33 @@ def _write_dataframe_to_s3(
     df = df.copy()
     df["local_date"] = pd.to_datetime(df["local_date"]).dt.date
     df["region"] = df["region"].astype(str)
-    df["local_datetime"] = pd.to_datetime(df["local_datetime"], errors="coerce")
+
+    def _remove_timezone(column: str) -> None:
+        if column not in df:
+            return
+
+        def _strip(value: object) -> object:
+            if value is None:
+                return value
+            if isinstance(value, pd.Timestamp):
+                if value.tz is not None:
+                    return value.tz_localize(None)
+                return value
+            if value is pd.NaT:
+                return value
+            tzinfo = getattr(value, "tzinfo", None)
+            if tzinfo is not None:
+                try:
+                    return value.replace(tzinfo=None)
+                except AttributeError:
+                    return value
+            return value
+
+        stripped = df[column].apply(_strip)
+        df[column] = pd.to_datetime(stripped, errors="coerce")
+
+    for col in ("timestamp_utc", "local_datetime", "central_datetime"):
+        _remove_timezone(col)
 
     output_format = os.getenv("OUTPUT_FORMAT", "csv").lower()
     partition_by_hour = _normalize_bool(os.getenv("PARTITION_BY_HOUR", "false"))
