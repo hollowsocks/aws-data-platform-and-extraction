@@ -427,6 +427,7 @@ Resources:
                   - glue:GetDatabase
                   - glue:GetTable
                   - glue:CreateTable
+                  - glue:DeleteTable
                   - glue:GetPartitions
                   - glue:CreatePartition
                   - glue:BatchCreatePartition
