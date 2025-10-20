@@ -110,7 +110,7 @@ Resources:
       FunctionName: growth-reporting-refresh
       Description: Pulls Triple Whale data and writes hourly dataset to S3
       Role: !GetAtt LambdaExecutionRole.Arn
-      Handler: infra.lambda_handler.lambda_handler
+      Handler: app.handler
       Runtime: python3.11
       Timeout: 900
       MemorySize: 2048
@@ -159,7 +159,7 @@ Resources:
       FunctionName: growth-reporting-refresh-trigger
       Description: Starts the Step Functions execution for growth reporting refresh
       Role: !GetAtt RefreshTriggerRole.Arn
-      Handler: infra.refresh_trigger.lambda_handler
+      Handler: refresh_trigger.lambda_handler
       Runtime: python3.11
       Timeout: 60
       MemorySize: 256
