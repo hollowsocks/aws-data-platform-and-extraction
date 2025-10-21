@@ -1,4 +1,4 @@
-name: Deploy TripleWhale Pipeline
+name: Deploy Hollow TripleWhale Pipeline
 
 on:
   workflow_dispatch:
@@ -16,18 +16,18 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ${{ vars.TRIPLEWHALE_AWS_REGION || 'us-east-1' }}
-  STACK_NAME: ${{ vars.TRIPLEWHALE_STACK_NAME || 'triplewhale-ingestion' }}
-  DATA_LAKE_BUCKET: ${{ vars.TRIPLEWHALE_DATA_LAKE_BUCKET }}
-  OUTPUT_PREFIX: ${{ vars.TRIPLEWHALE_OUTPUT_PREFIX || 'hourly' }}
-  ATHENA_RESULTS_BUCKET: ${{ vars.TRIPLEWHALE_ATHENA_RESULTS_BUCKET }}
-  ATHENA_DATABASE_NAME: ${{ vars.TRIPLEWHALE_ATHENA_DATABASE_NAME || 'growth_reporting' }}
-  ATHENA_TABLE_NAME: ${{ vars.TRIPLEWHALE_ATHENA_TABLE_NAME || 'growth_report_hourly' }}
-  GLUE_CRAWLER_NAME: ${{ vars.TRIPLEWHALE_GLUE_CRAWLER_NAME || 'triplewhale-hourly-crawler' }}
-  EVENT_SCHEDULE_EXPRESSION: ${{ vars.TRIPLEWHALE_EVENT_SCHEDULE || 'cron(15 * * * ? *)' }}
-  API_GATEWAY_HTTP_API_ID: ${{ vars.TRIPLEWHALE_HTTP_API_ID || '' }}
-  API_GATEWAY_AUTHORIZER_ID: ${{ vars.TRIPLEWHALE_AUTHORIZER_ID || '' }}
-  LAMBDA_ARTIFACT_BUCKET: ${{ vars.TRIPLEWHALE_LAMBDA_BUCKET }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  STACK_NAME: ${{ vars.STACK_NAME || 'hollow-growth-reporting-pipeline' }}
+  DATA_LAKE_BUCKET: ${{ vars.DATA_LAKE_BUCKET || 'hollow-growth-reporting-data' }}
+  OUTPUT_PREFIX: ${{ vars.OUTPUT_PREFIX || 'hourly' }}
+  ATHENA_RESULTS_BUCKET: ${{ vars.ATHENA_RESULTS_BUCKET || 'hollow-athena-results' }}
+  ATHENA_DATABASE_NAME: ${{ vars.ATHENA_DATABASE_NAME || 'hollow_growth_reporting' }}
+  ATHENA_TABLE_NAME: ${{ vars.ATHENA_TABLE_NAME || 'growth_report_hourly' }}
+  GLUE_CRAWLER_NAME: ${{ vars.GLUE_CRAWLER_NAME || 'hollow-growth-reporting-crawler' }}
+  EVENT_SCHEDULE_EXPRESSION: ${{ vars.EVENT_SCHEDULE_EXPRESSION || 'cron(15 * * * ? *)' }}
+  API_GATEWAY_HTTP_API_ID: ${{ vars.API_GATEWAY_HTTP_API_ID || '' }}
+  API_GATEWAY_AUTHORIZER_ID: ${{ vars.API_GATEWAY_AUTHORIZER_ID || '' }}
+  LAMBDA_ARTIFACT_BUCKET: ${{ vars.LAMBDA_ARTIFACT_BUCKET || 'hollow-lambda-deployments' }}
 
 jobs:
   deploy:
@@ -56,7 +56,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: triplewhale-deploy
+          role-session-name: hollow-triplewhale-deploy
 
       - name: Set up Python
         uses: actions/setup-python@v5
