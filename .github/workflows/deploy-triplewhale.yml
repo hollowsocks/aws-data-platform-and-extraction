@@ -16,18 +16,18 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  STACK_NAME: ${{ vars.STACK_NAME || 'hollow-growth-reporting-pipeline' }}
-  DATA_LAKE_BUCKET: ${{ vars.DATA_LAKE_BUCKET || 'hollow-growth-reporting-data' }}
-  OUTPUT_PREFIX: ${{ vars.OUTPUT_PREFIX || 'hourly' }}
-  ATHENA_RESULTS_BUCKET: ${{ vars.ATHENA_RESULTS_BUCKET || 'hollow-athena-results' }}
-  ATHENA_DATABASE_NAME: ${{ vars.ATHENA_DATABASE_NAME || 'hollow_growth_reporting' }}
-  ATHENA_TABLE_NAME: ${{ vars.ATHENA_TABLE_NAME || 'growth_report_hourly' }}
-  GLUE_CRAWLER_NAME: ${{ vars.GLUE_CRAWLER_NAME || 'hollow-growth-reporting-crawler' }}
-  EVENT_SCHEDULE_EXPRESSION: ${{ vars.EVENT_SCHEDULE_EXPRESSION || 'cron(15 * * * ? *)' }}
-  API_GATEWAY_HTTP_API_ID: ${{ vars.API_GATEWAY_HTTP_API_ID || '' }}
-  API_GATEWAY_AUTHORIZER_ID: ${{ vars.API_GATEWAY_AUTHORIZER_ID || '' }}
-  LAMBDA_ARTIFACT_BUCKET: ${{ vars.LAMBDA_ARTIFACT_BUCKET || 'hollow-lambda-deployments' }}
+  AWS_REGION: us-east-1
+  STACK_NAME: hollow-growth-reporting-pipeline
+  DATA_LAKE_BUCKET: hollow-growth-reporting-data
+  OUTPUT_PREFIX: hourly
+  ATHENA_RESULTS_BUCKET: hollow-athena-results
+  ATHENA_DATABASE_NAME: hollow_growth_reporting
+  ATHENA_TABLE_NAME: growth_report_hourly
+  GLUE_CRAWLER_NAME: hollow-growth-reporting-crawler
+  EVENT_SCHEDULE_EXPRESSION: cron(15 * * * ? *)
+  API_GATEWAY_HTTP_API_ID: ''
+  API_GATEWAY_AUTHORIZER_ID: ''
+  LAMBDA_ARTIFACT_BUCKET: hollow-lambda-deployments
 
 jobs:
   deploy:
@@ -54,8 +54,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::282304105893:role/github-actions-oidc
+          aws-region: us-east-1
           role-session-name: hollow-triplewhale-deploy
 
       - name: Set up Python
