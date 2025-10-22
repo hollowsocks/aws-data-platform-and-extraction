@@ -25,8 +25,8 @@ env:
   ATHENA_TABLE_NAME: growth_report_hourly
   GLUE_CRAWLER_NAME: hollow-growth-reporting-crawler
   EVENT_SCHEDULE_EXPRESSION: cron(15 * * * ? *)
-  API_GATEWAY_HTTP_API_ID: ''
-  API_GATEWAY_AUTHORIZER_ID: ''
+  API_GATEWAY_HTTP_API_ID: l5okpg2ko8
+  API_GATEWAY_AUTHORIZER_ID: 34wtu5
   LAMBDA_ARTIFACT_BUCKET: hollow-lambda-deployments
 
 jobs:
