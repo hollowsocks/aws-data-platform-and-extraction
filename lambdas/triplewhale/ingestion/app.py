@@ -195,8 +195,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     start_dt, end_dt = _resolve_dates(event)
 
-    records = fetch_hourly_metrics(triple_client, settings, start_dt, end_dt)
-    df = build_hourly_table(records)
+    # Fetch data day-by-day to avoid hitting TripleWhale API 10MB limit
+    all_records = []
+    current_start = start_dt
+
+    while current_start <= end_dt:
+        # Fetch one day at a time
+        current_end = datetime.fromisoformat(f"{current_start.date().isoformat()}T23:59:59+00:00")
+        if current_end > end_dt:
+            current_end = end_dt
+
+        print(f"Fetching data for {current_start.date()} to {current_end.date()}")
+        day_records = fetch_hourly_metrics(triple_client, settings, current_start, current_end)
+        all_records.extend(day_records)
+
+        # Move to next day
+        current_start = current_start + timedelta(days=1)
+        current_start = datetime.fromisoformat(f"{current_start.date().isoformat()}T00:00:00+00:00")
+
+    df = build_hourly_table(all_records)
 
     requested_start = start_dt.date()
     requested_end = end_dt.date()

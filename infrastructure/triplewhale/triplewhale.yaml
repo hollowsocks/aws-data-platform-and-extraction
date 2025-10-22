@@ -127,7 +127,7 @@ Resources:
           ATHENA_RESULTS_BUCKET: !Ref AthenaResultBucket
           TW_SECRET_ARN: !Ref TripleWhaleSecretArn
           OUTPUT_FORMAT: parquet
-          PARTITION_BY_HOUR: "false"
+          PARTITION_BY_HOUR: "true"
       Code:
         S3Bucket: !Ref LambdaCodeS3Bucket
         S3Key: !Ref LambdaCodeS3Key
