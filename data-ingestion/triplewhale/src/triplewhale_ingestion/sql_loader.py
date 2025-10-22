@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
+from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import json
@@ -115,7 +116,14 @@ def fetch_hourly_metrics(
     buffer_end = end_date + timedelta(days=1)
 
     order_rows = _fetch_orders_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
-    ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
+
+    # Fetch ads data split by channel to stay under TripleWhale's 10MB API limit
+    # Each channel query with the ±1 day buffer returns ~3-4MB, well under the limit
+    fb_ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end, 'facebook-ads')
+    google_ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end, 'google-ads')
+
+    # Combine both channels into a single iterable
+    ads_rows = chain(fb_ads_rows, google_ads_rows)
 
     buckets: Dict[Tuple[str, datetime], Dict[str, float | str]] = defaultdict(_make_bucket)
 
@@ -288,6 +296,7 @@ def _fetch_ads_hourly(
     shop_domain: str,
     start_date: datetime,
     end_date: datetime,
+    channel: str,
 ) -> Iterable[Dict[str, object]]:
     query = """
     SELECT
@@ -327,12 +336,13 @@ def _fetch_ads_hourly(
       anyHeavy(toJSONString(channel_ai_roas_pacing)) AS channel_ai_roas_pacing
     FROM ads_table
     WHERE event_date BETWEEN @startDate AND @endDate
-      AND channel IN ('facebook-ads','google-ads')
+      AND channel = '{channel}'
       AND campaign_status = 'ACTIVE'
       AND adset_status = 'ACTIVE'
       AND ad_status = 'ACTIVE'
     GROUP BY spend_hour, channel, account_id, campaign_name, adset_name
     """
+    query = query.format(channel=channel)
     return client.execute_sql(shop_domain, query, start_date, end_date)
 
 
