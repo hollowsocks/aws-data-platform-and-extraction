@@ -195,9 +195,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     start_dt, end_dt = _resolve_dates(event)
 
-    # Fetch data (filtered to ACTIVE campaigns/adsets/ads to stay under 10MB limit)
-    records = fetch_hourly_metrics(triple_client, settings, start_dt, end_dt)
-    df = build_hourly_table(records)
+    # Fetch data HOUR BY HOUR to stay under 10MB limit
+    # (Even with ACTIVE filters, 24 hours at once exceeds limit)
+    all_records = []
+    current_hour = start_dt.replace(minute=0, second=0, microsecond=0)
+    end_hour = end_dt.replace(minute=0, second=0, microsecond=0)
+
+    while current_hour <= end_hour:
+        hour_end = current_hour + timedelta(hours=1) - timedelta(seconds=1)
+        if hour_end > end_dt:
+            hour_end = end_dt
+
+        print(f"Fetching hour: {current_hour.isoformat()}")
+        hour_records = fetch_hourly_metrics(triple_client, settings, current_hour, hour_end)
+        all_records.extend(hour_records)
+
+        current_hour = current_hour + timedelta(hours=1)
+
+    df = build_hourly_table(all_records)
 
     requested_start = start_dt.date()
     requested_end = end_dt.date()
