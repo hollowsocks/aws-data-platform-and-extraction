@@ -218,6 +218,7 @@ Resources:
 
   GrowthGlueTable:
     Type: AWS::Glue::Table
+    DependsOn: GrowthGlueDatabase
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseName: !Ref AthenaDatabaseName
