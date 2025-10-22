@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -11,6 +11,7 @@ from dateutil import tz
 
 from .config import Settings
 from .models import HourlyRegionMetrics
+from .timezones import REGION_TIMEZONES
 from .triple_whale_client import TripleWhaleClient
 
 COUNTRY_TO_REGION = {
@@ -102,25 +103,48 @@ def _make_bucket() -> Dict[str, float | str]:
 def fetch_hourly_metrics(
     client: TripleWhaleClient,
     settings: Settings,
-    start_date: datetime,
-    end_date: datetime,
+    store_start_local: datetime,
+    store_end_local: datetime,
+    *,
+    store_timezone: Optional[str] = None,
 ) -> List[HourlyRegionMetrics]:
     if not settings.triple_whale_shop_domain:
         raise RuntimeError("TRIPLE_WHALE_SHOP_DOMAIN (or SHOPIFY_DOMAIN) must be set to run the pipeline.")
 
-    shop_timezone = _detect_shop_timezone(client, settings.triple_whale_shop_domain)
+    if store_start_local.tzinfo is None or store_end_local.tzinfo is None:
+        raise ValueError("store_start_local and store_end_local must be timezone-aware datetimes.")
+
+    shop_timezone = store_timezone or _detect_shop_timezone(client, settings.triple_whale_shop_domain)
     store_zone = tz.gettz(shop_timezone) or tz.UTC
+    store_start_local = store_start_local.astimezone(store_zone)
+    store_end_local = store_end_local.astimezone(store_zone)
+    if store_start_local > store_end_local:
+        raise ValueError("store_start_local must be on or before store_end_local.")
+
+    fetch_start_utc, fetch_end_utc = _expand_fetch_window(store_start_local, store_end_local)
     account_region_map = (settings.triple_whale_account_region_map or {})
 
-    buffer_start = start_date - timedelta(days=1)
-    buffer_end = end_date + timedelta(days=1)
+    order_rows = _fetch_orders_hourly(
+        client,
+        settings.triple_whale_shop_domain,
+        fetch_start_utc,
+        fetch_end_utc,
+    )
 
-    order_rows = _fetch_orders_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end)
-
-    # Fetch ads data split by channel to stay under TripleWhale's 10MB API limit
-    # Each channel query with the ±1 day buffer returns ~3-4MB, well under the limit
-    fb_ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end, 'facebook-ads')
-    google_ads_rows = _fetch_ads_hourly(client, settings.triple_whale_shop_domain, buffer_start, buffer_end, 'google-ads')
+    fb_ads_rows = _fetch_ads_hourly(
+        client,
+        settings.triple_whale_shop_domain,
+        fetch_start_utc,
+        fetch_end_utc,
+        "facebook-ads",
+    )
+    google_ads_rows = _fetch_ads_hourly(
+        client,
+        settings.triple_whale_shop_domain,
+        fetch_start_utc,
+        fetch_end_utc,
+        "google-ads",
+    )
 
     # Combine both channels into a single iterable
     ads_rows = chain(fb_ads_rows, google_ads_rows)
@@ -258,13 +282,35 @@ def fetch_hourly_metrics(
 
     return records
 
+def _expand_fetch_window(
+    store_start_local: datetime,
+    store_end_local: datetime,
+) -> Tuple[datetime, datetime]:
+    """Expand the UTC fetch window to cover all regional local days."""
+    fetch_start = store_start_local.astimezone(tz.UTC)
+    fetch_end = store_end_local.astimezone(tz.UTC)
+
+    for config in REGION_TIMEZONES.values():
+        region_zone = config.zone
+        region_start_local = store_start_local.astimezone(region_zone)
+        region_day_start = datetime.combine(region_start_local.date(), time(0, 0, 0), tzinfo=region_zone)
+        region_day_end = region_day_start + timedelta(days=1) - timedelta(seconds=1)
+
+        fetch_start = min(fetch_start, region_day_start.astimezone(tz.UTC))
+        fetch_end = max(fetch_end, region_day_end.astimezone(tz.UTC))
+
+    return fetch_start, fetch_end
+
 
 def _fetch_orders_hourly(
     client: TripleWhaleClient,
     shop_domain: str,
-    start_date: datetime,
-    end_date: datetime,
+    window_start_utc: datetime,
+    window_end_utc: datetime,
 ) -> Iterable[Dict[str, object]]:
+    start_iso = window_start_utc.strftime("%Y-%m-%d %H:%M:%S")
+    end_iso = window_end_utc.strftime("%Y-%m-%d %H:%M:%S")
+
     query = """
     SELECT
       toStartOfHour(created_at) AS order_hour,
@@ -284,23 +330,27 @@ def _fetch_orders_hourly(
       sum(handling_fees) AS handling_fees,
       sum(payment_gateway_costs) AS payment_gateway_costs
     FROM orders_table
-    WHERE event_date BETWEEN @startDate AND @endDate
+    WHERE toDateTime(created_at) >= toDateTime('{start}')
+      AND toDateTime(created_at) <= toDateTime('{end}')
       AND shipping_country_code IN ('US','CA','GB','UK','AU')
     GROUP BY order_hour, shipping_country_code
-    """
-    return client.execute_sql(shop_domain, query, start_date, end_date)
+    """.format(start=start_iso, end=end_iso)
+    return client.execute_sql(shop_domain, query, window_start_utc, window_end_utc)
 
 
 def _fetch_ads_hourly(
     client: TripleWhaleClient,
     shop_domain: str,
-    start_date: datetime,
-    end_date: datetime,
+    window_start_utc: datetime,
+    window_end_utc: datetime,
     channel: str,
 ) -> Iterable[Dict[str, object]]:
+    start_iso = window_start_utc.strftime("%Y-%m-%d %H:%M:%S")
+    end_iso = window_end_utc.strftime("%Y-%m-%d %H:%M:%S")
+
     query = """
     SELECT
-      toStartOfHour(toDateTime(event_date) + toIntervalHour(event_hour)) AS spend_hour,
+      toStartOfHour(toDateTime(event_date) + toIntervalHour(toUInt32(event_hour))) AS spend_hour,
       channel,
       account_id,
       campaign_name,
@@ -335,15 +385,15 @@ def _fetch_ads_hourly(
       anyHeavy(toJSONString(channel_ai_recommendation)) AS channel_ai_recommendation,
       anyHeavy(toJSONString(channel_ai_roas_pacing)) AS channel_ai_roas_pacing
     FROM ads_table
-    WHERE event_date BETWEEN @startDate AND @endDate
-      AND channel = '{channel}'
+    WHERE channel = '{channel}'
+      AND toDateTime(event_date) + toIntervalHour(toUInt32(event_hour)) >= toDateTime('{start}')
+      AND toDateTime(event_date) + toIntervalHour(toUInt32(event_hour)) <= toDateTime('{end}')
       AND campaign_status = 'ACTIVE'
       AND adset_status = 'ACTIVE'
       AND ad_status = 'ACTIVE'
     GROUP BY spend_hour, channel, account_id, campaign_name, adset_name
-    """
-    query = query.format(channel=channel)
-    return client.execute_sql(shop_domain, query, start_date, end_date)
+    """.format(channel=channel, start=start_iso, end=end_iso)
+    return client.execute_sql(shop_domain, query, window_start_utc, window_end_utc)
 
 
 def _detect_shop_timezone(client: TripleWhaleClient, shop_domain: str) -> str:

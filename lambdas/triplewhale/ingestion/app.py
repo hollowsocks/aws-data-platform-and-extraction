@@ -3,12 +3,13 @@ from __future__ import annotations
 import gzip
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from typing import Any, Dict, Iterable, Tuple
 
 import boto3
 import pandas as pd
+from dateutil import tz
 
 from triplewhale_ingestion import build_hourly_table, fetch_hourly_metrics
 from triplewhale_ingestion.config import Settings
@@ -31,7 +32,7 @@ def _load_secrets() -> None:
             os.environ[key] = value
 
 
-def _resolve_dates(event: Dict[str, Any]) -> Tuple[datetime, datetime]:
+def _resolve_dates(event: Dict[str, Any], store_timezone: str) -> Tuple[datetime, datetime]:
     payload = event or {}
     if "detail" in payload:
         payload = payload["detail"] or {}
@@ -40,14 +41,31 @@ def _resolve_dates(event: Dict[str, Any]) -> Tuple[datetime, datetime]:
     end_str = payload.get("end_date")
 
     if start_str and end_str:
-        start_dt = datetime.fromisoformat(f"{start_str}T00:00:00+00:00")
-        end_dt = datetime.fromisoformat(f"{end_str}T23:59:59+00:00")
-        return start_dt, end_dt
+        start_date = date.fromisoformat(start_str)
+        end_date = date.fromisoformat(end_str)
+    else:
+        zone = tz.gettz(store_timezone)
+        today_local = datetime.now(zone).date() if zone else date.today()
+        start_date = today_local - timedelta(days=1)
+        end_date = start_date
 
-    yesterday = date.today() - timedelta(days=1)
-    start_dt = datetime.fromisoformat(f"{yesterday.isoformat()}T00:00:00+00:00")
-    end_dt = datetime.fromisoformat(f"{yesterday.isoformat()}T23:59:59+00:00")
-    return start_dt, end_dt
+    zone = tz.gettz(store_timezone) or tz.UTC
+    start_local = datetime.combine(start_date, time(0, 0, 0), tzinfo=zone)
+    end_local = datetime.combine(end_date, time(23, 59, 59), tzinfo=zone)
+    return start_local, end_local
+
+
+def _determine_store_timezone(client: "TripleWhaleClient", settings: Settings) -> str:
+    """Return the shop's primary timezone, defaulting to UTC if unknown."""
+    shop_domain = settings.triple_whale_shop_domain
+    if not shop_domain:
+        return "UTC"
+
+    # Import lazily to avoid circular imports during module initialisation.
+    from triplewhale_ingestion.sql_loader import _detect_shop_timezone
+
+    detected = _detect_shop_timezone(client, shop_domain)
+    return detected or "UTC"
 
 
 def _normalize_bool(value: str) -> bool:
@@ -193,35 +211,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     triple_client = TripleWhaleClient(settings)
 
-    start_dt, end_dt = _resolve_dates(event)
+    store_timezone = _determine_store_timezone(triple_client, settings)
 
-    # Fetch data in 10-MINUTE increments to stay safely under 10MB limit
-    # (ACTIVE filters reduce rows significantly, but some hours have more activity than others)
-    all_records = []
-    current_time = start_dt.replace(minute=0, second=0, microsecond=0)
+    start_local, end_local = _resolve_dates(event, store_timezone)
+    records = fetch_hourly_metrics(
+        triple_client,
+        settings,
+        start_local,
+        end_local,
+        store_timezone=store_timezone,
+    )
 
-    while current_time <= end_dt:
-        chunk_end = current_time + timedelta(minutes=10) - timedelta(seconds=1)
-        if chunk_end > end_dt:
-            chunk_end = end_dt
+    df = build_hourly_table(records)
 
-        print(f"Fetching 10-min chunk: {current_time.isoformat()}")
-        chunk_records = fetch_hourly_metrics(triple_client, settings, current_time, chunk_end)
-        all_records.extend(chunk_records)
-
-        current_time = current_time + timedelta(minutes=10)
-
-    df = build_hourly_table(all_records)
-
-    requested_start = start_dt.date()
-    requested_end = end_dt.date()
+    requested_start = start_local.date()
+    requested_end = end_local.date()
     if "local_date" in df.columns:
         df = df[(df["local_date"] >= requested_start) & (df["local_date"] <= requested_end)]
 
     output_bucket = os.environ["OUTPUT_BUCKET"]
     prefix = os.environ.get("OUTPUT_PREFIX", "hourly")
 
-    write_info = _write_dataframe_to_s3(df, output_bucket, prefix, start_dt, end_dt)
+    write_info = _write_dataframe_to_s3(df, output_bucket, prefix, start_local, end_local)
 
     return {
         "status": "success",

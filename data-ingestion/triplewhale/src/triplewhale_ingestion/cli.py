@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Optional
 
+from dateutil import tz
+
 from .aggregator import build_daily_report, build_hourly_table
 from .config import Settings
-from .sql_loader import fetch_hourly_metrics
+from .sql_loader import _detect_shop_timezone, fetch_hourly_metrics
 from .triple_whale_client import TripleWhaleClient
 
 
@@ -40,16 +42,20 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def resolve_dates(settings: Settings, args: argparse.Namespace) -> tuple[datetime, datetime]:
-    today = datetime.utcnow().date()
-    default_start = settings.default_start_date or today - timedelta(days=1)
-    default_end = settings.default_end_date or today - timedelta(days=1)
+def resolve_dates(settings: Settings, args: argparse.Namespace, store_timezone: str) -> tuple[datetime, datetime]:
+    zone = tz.gettz(store_timezone) or tz.UTC
+    today_local = datetime.now(zone).date()
+
+    default_start = settings.default_start_date or today_local - timedelta(days=1)
+    default_end = settings.default_end_date or today_local - timedelta(days=1)
 
     start_date = args.start_date or default_start.isoformat()
     end_date = args.end_date or default_end.isoformat()
 
-    start_dt = datetime.fromisoformat(f"{start_date}T00:00:00+00:00")
-    end_dt = datetime.fromisoformat(f"{end_date}T23:59:59+00:00")
+    start_date_obj = date.fromisoformat(start_date)
+    end_date_obj = date.fromisoformat(end_date)
+    start_dt = datetime.combine(start_date_obj, time(0, 0, 0), tzinfo=zone)
+    end_dt = datetime.combine(end_date_obj, time(23, 59, 59), tzinfo=zone)
     if start_dt > end_dt:
         raise ValueError("start-date must be on or before end-date")
     return start_dt, end_dt
@@ -64,10 +70,20 @@ def main(argv: Optional[list[str]] = None) -> None:
 
         logging.basicConfig(level=logging.DEBUG)
 
-    start_dt, end_dt = resolve_dates(settings, args)
-
     client = TripleWhaleClient(settings)
-    hourly_records = fetch_hourly_metrics(client, settings, start_dt, end_dt)
+    shop_domain = settings.triple_whale_shop_domain or ""
+    store_timezone = _detect_shop_timezone(client, shop_domain) if shop_domain else "UTC"
+    store_timezone = store_timezone or "UTC"
+
+    start_dt, end_dt = resolve_dates(settings, args, store_timezone)
+
+    hourly_records = fetch_hourly_metrics(
+        client,
+        settings,
+        start_dt,
+        end_dt,
+        store_timezone=store_timezone,
+    )
     requested_start_date = start_dt.date()
     requested_end_date = end_dt.date()
 
