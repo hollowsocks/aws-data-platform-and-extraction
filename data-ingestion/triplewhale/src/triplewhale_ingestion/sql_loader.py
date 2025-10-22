@@ -328,6 +328,9 @@ def _fetch_ads_hourly(
     FROM ads_table
     WHERE event_date BETWEEN @startDate AND @endDate
       AND channel IN ('facebook-ads','google-ads')
+      AND campaign_status = 'ACTIVE'
+      AND adset_status = 'ACTIVE'
+      AND ad_status = 'ACTIVE'
     GROUP BY spend_hour, channel, account_id, campaign_name, adset_name
     """
     return client.execute_sql(shop_domain, query, start_date, end_date)

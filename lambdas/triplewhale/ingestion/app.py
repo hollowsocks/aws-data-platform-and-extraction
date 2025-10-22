@@ -195,24 +195,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     start_dt, end_dt = _resolve_dates(event)
 
-    # Fetch data in 10-MINUTE increments to avoid hitting TripleWhale API 10MB limit
-    all_records = []
-    current_time = start_dt.replace(minute=0, second=0, microsecond=0)
-
-    while current_time <= end_dt:
-        # Fetch 10 minutes at a time
-        chunk_end = current_time + timedelta(minutes=10) - timedelta(seconds=1)
-        if chunk_end > end_dt:
-            chunk_end = end_dt
-
-        print(f"Fetching 10-min chunk: {current_time.isoformat()} to {chunk_end.isoformat()}")
-        chunk_records = fetch_hourly_metrics(triple_client, settings, current_time, chunk_end)
-        all_records.extend(chunk_records)
-
-        # Move to next 10-minute window
-        current_time = current_time + timedelta(minutes=10)
-
-    df = build_hourly_table(all_records)
+    # Fetch data (filtered to ACTIVE campaigns/adsets/ads to stay under 10MB limit)
+    records = fetch_hourly_metrics(triple_client, settings, start_dt, end_dt)
+    df = build_hourly_table(records)
 
     requested_start = start_dt.date()
     requested_end = end_dt.date()
