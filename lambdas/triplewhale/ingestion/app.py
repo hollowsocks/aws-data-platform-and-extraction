@@ -195,22 +195,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     start_dt, end_dt = _resolve_dates(event)
 
-    # Fetch data HOUR BY HOUR to stay under 10MB limit
-    # (Even with ACTIVE filters, 24 hours at once exceeds limit)
+    # Fetch data in 10-MINUTE increments to stay safely under 10MB limit
+    # (ACTIVE filters reduce rows significantly, but some hours have more activity than others)
     all_records = []
-    current_hour = start_dt.replace(minute=0, second=0, microsecond=0)
-    end_hour = end_dt.replace(minute=0, second=0, microsecond=0)
+    current_time = start_dt.replace(minute=0, second=0, microsecond=0)
 
-    while current_hour <= end_hour:
-        hour_end = current_hour + timedelta(hours=1) - timedelta(seconds=1)
-        if hour_end > end_dt:
-            hour_end = end_dt
+    while current_time <= end_dt:
+        chunk_end = current_time + timedelta(minutes=10) - timedelta(seconds=1)
+        if chunk_end > end_dt:
+            chunk_end = end_dt
 
-        print(f"Fetching hour: {current_hour.isoformat()}")
-        hour_records = fetch_hourly_metrics(triple_client, settings, current_hour, hour_end)
-        all_records.extend(hour_records)
+        print(f"Fetching 10-min chunk: {current_time.isoformat()}")
+        chunk_records = fetch_hourly_metrics(triple_client, settings, current_time, chunk_end)
+        all_records.extend(chunk_records)
 
-        current_hour = current_hour + timedelta(hours=1)
+        current_time = current_time + timedelta(minutes=10)
 
     df = build_hourly_table(all_records)
 
