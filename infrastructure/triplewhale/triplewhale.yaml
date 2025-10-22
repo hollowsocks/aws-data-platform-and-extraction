@@ -46,6 +46,7 @@ Parameters:
 Conditions:
   HasSecret: !Not [!Equals [!Ref TripleWhaleSecretArn, ""]]
   HasAuthorizer: !Not [!Equals [!Ref ApiGatewayAuthorizerId, ""]]
+  HasApiGateway: !Not [!Equals [!Ref ApiGatewayHttpApiId, ""]]
 
 
 Resources:
@@ -554,6 +555,7 @@ Resources:
 
   ApiTriggerIntegration:
     Type: AWS::ApiGatewayV2::Integration
+    Condition: HasApiGateway
     Properties:
       ApiId: !Ref ApiGatewayHttpApiId
       IntegrationType: AWS_PROXY
@@ -563,6 +565,7 @@ Resources:
 
   ApiTriggerRoute:
     Type: AWS::ApiGatewayV2::Route
+    Condition: HasApiGateway
     Properties:
       ApiId: !Ref ApiGatewayHttpApiId
       RouteKey: POST /growth-reporting/refresh
@@ -572,6 +575,7 @@ Resources:
 
   ApiTriggerInvokePermission:
     Type: AWS::Lambda::Permission
+    Condition: HasApiGateway
     Properties:
       FunctionName: !Ref RefreshTriggerFunction
       Action: lambda:InvokeFunction
